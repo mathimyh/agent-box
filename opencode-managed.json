@@ -1,0 +1,42 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "*": "allow",
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow",
+      "**/*.pem": "deny",
+      "**/*.key": "deny",
+      "**/id_rsa*": "deny",
+      "**/id_ed25519*": "deny",
+      "**/.aws/credentials": "deny",
+      "**/.npmrc": "deny",
+      "**/.git-credentials": "deny"
+    },
+    "edit": "allow",
+    "bash": "allow",
+    "grep": "allow",
+    "glob": "allow",
+    "lsp": "allow",
+    "skill": "allow",
+    "todowrite": "allow",
+    "question": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "task": "allow",
+    "intility-id_*": "ask",
+    "intility-id_id_get_*": "allow",
+    "intility-id_id_list_*": "allow",
+    "intility-id_id_check_*": "allow",
+    "intility-id_id_batch_check": "allow",
+    "intility-id_id_describe_*": "allow",
+    "intility-id_id_preview_delete": "allow",
+    "external_directory": {
+      "*": "ask",
+      "/scratch/**": "allow"
+    },
+    "doom_loop": "ask"
+  }
+}

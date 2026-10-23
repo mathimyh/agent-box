@@ -1,0 +1,7 @@
+# Staged copies of the host config and build output
+.staging/
+scratch/
+sbx-kit/files/
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
