@@ -48,7 +48,7 @@ What `build.ps1` stages into `files/home/` (about 100 MB):
 
 - `~/.claude/skills` (without `synced`), `commands`, `plugins/cache`, `plugins/marketplaces` (without `temp_*`) and the two plugin registries with paths changed to `/home/agent`. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
 - `~/.claude/CLAUDE.md` with `assets/sandbox-instructions.md` appended.
-- `~/.config/opencode/opencode.json` with each `apiKey` replaced by `{env:OPENCODE_API_KEY_<PROVIDER>}`. `spec.yaml` declares one proxy-managed credential per provider. Set the keys with `sbx secret set <provider> -t <key>`.
+- `~/.config/opencode/opencode.json` with each `apiKey` replaced by `{env:OPENCODE_API_KEY_<PROVIDER>}`. `spec.yaml` declares one proxy-managed credential per provider. Set the keys with `sbx secret set <provider> -t <key>`. The `intility-id` MCP entry points at the sbx MCP gateway (`http://mcp-gateway.docker.internal/mcp`), the same server that Claude uses. The sandbox has no OAuth token for the direct URL, and the proxy adds the token for the gateway.
 - No npm token. `spec.yaml` declares the credential `npm-intility`, and the proxy adds `Authorization: Bearer <token>` to each request to `npm.intility.com`. npm in the sandbox has no auth config. `npm login` in the sandbox is not necessary, and it would put the token in a file that every worker can read.
 - `.local/share/agent-box/`: the install scripts, the sanitized Claude settings, the first-run flags, `opencode-managed.json` and the git identity.
 
