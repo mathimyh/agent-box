@@ -58,6 +58,16 @@ Run the commands in PowerShell from the agent-box folder.
 
 `sbx kit add` does not accept this kit. To apply a kit change, remove the sandbox and create it again (step 3 to 6). Everything in the sandbox is lost, also clones and worktrees.
 
+## Project kits
+
+A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`. Add it with a second `--kit` at create:
+
+```powershell
+sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id --static-mcp intility-id
+```
+
+`sbx kit add` does not accept a kit that declares credentials. To add a project kit to a sandbox that exists, remove the sandbox and create it again. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
+
 ## Start workers
 
 Use the `orca-workers` skill from an agent that runs inside the sandbox. It creates the worktrees, starts the workers and collects their results.
