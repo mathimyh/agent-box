@@ -13,7 +13,7 @@ Date: 2026-10-26. Read `README.md` and `docs/design.md` first.
 
 ## Open
 
-1. The kit now has the credential `npm-intility` for `npm.intility.com`, and no flash credential. Recreate the sandbox as `intility-id` (not `spike`) to apply it. Then change the Orca SSH host to `intility-id.sbx`. Not verified yet: `npm ci` in the Portal works through the proxy, and `~/.npmrc` in the sandbox holds no token.
+1. The sandbox `intility-id` (2026-10-26) runs next to `spike`. Agents still work in `spike`. Remove `spike` when their branches are pushed. Verified in `intility-id`: the proxy injects the npm token (`npm view` of a private Font Awesome package works with no `~/.npmrc`), and `npm ci` in the Portal works with npm 11. Not done yet: an Orca SSH target for `intility-id.sbx`, and the Orca project setup for the clone.
 2. If the GLM keys in `~/.config/opencode/opencode.json` on the host are not rotated yet, rotate them. They are in plain text there.
 3. The host has 6 stale plugin entries (`ai-go-live` and `mcp-builder` from dadp-skills). Run `claude plugin marketplace update dadp-skills` or uninstall them.
 4. Not checked in the sandbox: `packages/access-tree` in intility-id failed `npm ci` with E401 in the old containers. It has its own `.npmrc`.

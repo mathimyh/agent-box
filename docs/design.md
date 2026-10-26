@@ -52,13 +52,14 @@ What `build.ps1` stages into `files/home/` (about 100 MB):
 - No npm token. `spec.yaml` declares the credential `npm-intility`, and the proxy adds `Authorization: Bearer <token>` to each request to `npm.intility.com`. npm in the sandbox has no auth config. `npm login` in the sandbox is not necessary, and it would put the token in a file that every worker can read.
 - `.local/share/agent-box/`: the install scripts, the sanitized Claude settings, the first-run flags, `opencode-managed.json` and the git identity.
 
-The install step installs `libicu`, the .NET SDK 10, `oc` 4.15 and `opencode`, writes `/etc/opencode/opencode.json`, and adds the environment to `/etc/sandbox-persistent.sh`. Every shell and SSH session reads that file. Then `agent-config.sh` runs as the agent user and merges the staged config into `~/.claude/settings.json` and `~/.claude.json` with `jq`. The merge keeps the keys that the agent kit and Orca write there (permission mode, hooks, status line).
+The install step installs `libicu`, the .NET SDK 10, `oc` 4.15, npm 11 and `opencode`, writes `/etc/opencode/opencode.json`, and adds the environment to `/etc/sandbox-persistent.sh`. Every shell and SSH session reads that file. Then `agent-config.sh` runs as the agent user and merges the staged config into `~/.claude/settings.json` and `~/.claude.json` with `jq`. The merge keeps the keys that the agent kit and Orca write there (permission mode, hooks, status line).
 
 Facts learned:
 
 - The sandbox has `remote-settings.json` from the organization. It holds the `Bash(gh auth *)` ask rule, and the kit cannot remove it. The sandbox note tells the agent not to run `gh auth`. `gh` is authenticated through the proxy.
 - Orca writes its hooks and status line into the sandbox `settings.json` at the first SSH session.
 - The sandbox already has Docker (the agent is in the `docker` group), `gh`, `node` 22, `uv` and `jq`. The image is Ubuntu 26.04.
+- The image has Ubuntu's npm 9.2.0. With Node 22, `npm ci` in the Portal fails after about 5 s with `ECONNRESET` ("aborted"). The registry and the proxy are not the cause: curl downloads all 861 archives, also slowly. npm 11 installs the Portal in 17 s. The install step therefore installs npm 11.
 - The kit network policy is added to the global policy per sandbox. The global `balanced` policy allows GitHub, npmjs, nuget.org, dot.net and Ubuntu. The kit adds the install hosts, `api.nuget.org`, `npm.intility.com`, `*.ai.intility.app` and the opencode model catalog.
 - The Intility ID MCP server is registered with `sbx mcp add intility-id --url ...` and authorized over OAuth on the host. Load it into a sandbox with `sbx mcp load intility-id --sandbox <name>`, or with `--static-mcp` at create.
 - Auto mode refuses `sbx rm`, `sbx create` and `sbx kit add`. The user runs them from the agent-box folder.

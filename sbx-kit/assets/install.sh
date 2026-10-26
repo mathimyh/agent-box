@@ -26,6 +26,10 @@ if [ ! -x /usr/local/bin/oc ]; then
     | tar -xz -C /usr/local/bin oc kubectl
 fi
 
+# The image has Ubuntu's npm 9.2.0. With Node 22 it fails `npm ci` with
+# ECONNRESET ("aborted") when it downloads many packages.
+npm install -g npm@11
+
 # opencode, with the approved permissions as managed config.
 # See opencode-managed.json in the agent-box repo.
 command -v opencode >/dev/null 2>&1 || npm install -g opencode-ai
