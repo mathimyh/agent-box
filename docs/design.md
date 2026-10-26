@@ -18,7 +18,7 @@ The kit in `sbx-kit/` adds the user's config and tools to the built-in `claude` 
 | Worktree location | Inside the sandbox | git on a Linux file system is fast (`git status` in 0.03 s). A bind mount from Windows took 13 to 19 s. |
 | Orca integration | SSH "Run on" target | Orca runs its daemon and status hooks in the sandbox. Agents start from the Orca UI or with `worker-start`. |
 | Secrets | `sbx secret` | The proxy injects the real token for the target domain. The agent sees only a placeholder. |
-| Grain | One sandbox per project, with a scoped GitHub token | A worker can only reach the repos of its project. Set the token with `sbx secret set github --sandbox <name>`. Decided 2026-10-26, not done yet: the token is global now. |
+| Grain | One sandbox per project, with a scoped GitHub token | A worker can only reach the repos of its project. Set the token with `sbx secret set github --sandbox <name>`. See "GitHub token per sandbox". |
 
 Known trade-off: all worktrees and the main checkout share one file system and one user. Only the brief stops a worker from changing main or a sibling worktree.
 
@@ -63,6 +63,18 @@ Facts learned:
 - The kit network policy is added to the global policy per sandbox. The global `balanced` policy allows GitHub, npmjs, nuget.org, dot.net and Ubuntu. The kit adds the install hosts, `api.nuget.org`, `npm.intility.com`, `*.ai.intility.app` and the opencode model catalog.
 - The Intility ID MCP server is registered with `sbx mcp add intility-id --url ...` and authorized over OAuth on the host. Load it into a sandbox with `sbx mcp load intility-id --sandbox <name>`, or with `--static-mcp` at create.
 - Auto mode refuses `sbx rm`, `sbx create` and `sbx kit add`. The user runs them from the agent-box folder.
+
+## GitHub token per sandbox
+
+Each sandbox gets a fine-grained token for the repos of its project. A secret set with `--sandbox` overrides the global `github` secret for that sandbox. Tested 2026-10-26 on `intility-id`: the selected repo had read and push access, and a private repo that was not selected returned 404.
+
+Token settings:
+
+- Resource owner: the org that owns the repos. If the org requires approval, an org admin must approve the token.
+- Repository access: "Only select repositories". Select the project repo and the repos that the workers read from. Every selected repo gets the same permissions, so select only what the workers need. Public repos are readable without selection.
+- Permissions: Contents, Pull requests and Issues read and write. Actions and Commit statuses read. Metadata read (required). Workflows no access, so agents cannot change `.github/workflows`.
+
+Two tokens (read on all repos, write on one) do not work. The proxy selects the token by domain, not by repo. Contents write also allows a push to `main`, so the selected repos need branch protection that requires a PR.
 
 ## opencode permissions
 

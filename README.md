@@ -44,6 +44,12 @@ Run the commands in PowerShell from the agent-box folder.
    sbx create claude --name <name> --kit .\sbx-kit --static-mcp intility-id
    ```
 
+   Then set a fine-grained GitHub token for the repos of this sandbox. The command asks for the value. See "GitHub token per sandbox" in `docs/design.md` for the token settings.
+
+   ```powershell
+   sbx secret set github --sandbox <name>
+   ```
+
 5. Clone the repo in the sandbox to `/home/agent/repos/<repo>`.
 
 6. In Orca, add an SSH target "Docker Agents" with host `<name>.sbx` and user `_default_user_`. Then register the clone as a project on that host. See "Orca" in `docs/design.md`.
