@@ -31,6 +31,10 @@ fi
 command -v opencode >/dev/null 2>&1 || npm install -g opencode-ai
 mkdir -p /etc/opencode
 cp "$ASSETS/opencode-managed.json" /etc/opencode/opencode.json
+# opencode tells the agent it can write to /tmp/opencode. Without this,
+# workers found it owned by root and could not write there.
+mkdir -p /tmp/opencode
+chown agent:agent /tmp/opencode
 
 # Environment for every shell, also SSH sessions from Orca.
 if ! grep -q 'agent-box' /etc/sandbox-persistent.sh 2>/dev/null; then
