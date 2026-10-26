@@ -1,0 +1,38 @@
+# Project mixin for the intility-id sandbox (kit schema v2).
+# Gives `oc` read access to the intility-id cluster. The proxy injects a
+# ServiceAccount token with the `view` role. The agent never sees the token.
+# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id
+# Set the token with: sbx secret set openshift-intility-id --sandbox intility-id
+schemaVersion: "2"
+kind: mixin
+name: intility-id
+version: "0.1.0"
+displayName: intility-id cluster (read)
+description: Read access with oc to the intility-id OpenShift cluster.
+
+permissions:
+  network:
+    allow:
+      - api-intility-id-nxa5h0.apps.intilitycloud.com
+
+credentials:
+  - service: openshift-intility-id
+    description: ServiceAccount token (view) for the intility-id cluster
+    apiKey:
+      name: OPENSHIFT_INTILITY_ID_TOKEN
+      proxyManaged: true
+      inject:
+        - domain: api-intility-id-nxa5h0.apps.intilitycloud.com
+          header: Authorization
+          scheme: bearer
+
+# A kubeconfig without credentials. oc sends no token, and the proxy adds it.
+setup:
+  install:
+    - command: >-
+        oc config set-cluster intility-id --server=https://api-intility-id-nxa5h0.apps.intilitycloud.com:443 &&
+        oc config set-credentials proxy &&
+        oc config set-context intility-id --cluster=intility-id --user=proxy --namespace=default &&
+        oc config use-context intility-id
+      user: "1000"
+      description: kubeconfig for the intility-id cluster

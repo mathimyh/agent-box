@@ -33,6 +33,7 @@ Known trade-off: all worktrees and the main checkout share one file system and o
 | `sbx-kit/assets/claude-json.json` | First-run flags for `~/.claude.json`. |
 | `sbx-kit/assets/sandbox-instructions.md` | Sandbox note. Appended to `CLAUDE.md` in the sandbox. |
 | `opencode-managed.json` | Approved opencode permissions. See "opencode permissions". |
+| `kits/<project>/spec.yaml` | Project kit. See "Project kits". |
 
 ## Docker Sandboxes kit
 
@@ -109,6 +110,17 @@ This is the normal path. The `orca-workers` skill describes it. Inside the sandb
 - Terminal handles are different on each host. Use `--environment "Docker Agents"` for `terminal read` and `terminal send` on sandbox terminals.
 - From outside an Orca terminal: create a shell terminal on the host (`orca terminal create --worktree path:<main checkout>`), then `run-create --objective ... --from <handle>`, then `worker-start ... --from <handle>`. Read results with `orchestration check --terminal <handle>`. `worker-show` and `worker-read` take `--dispatch` and `--environment`, not `--from`.
 - `worker-start` returns `stage: input_accepted` on success.
+
+## Project kits
+
+Access that only one project needs goes in a project kit, not in `sbx-kit`. `sbx create` takes `--kit` more than one time.
+
+`kits/intility-id` gives `oc` read access to the intility-id dev cluster:
+
+- The network policy allows only the cluster API host.
+- The ServiceAccount `sandbox-agents/intility-id-sandbox` has the ClusterRole `view`. It can read all namespaces, but not Secrets. ArgoCD manages it from the intility-id repo (intility/intility-id#1151).
+- The proxy adds the ServiceAccount token to requests to the API host. The kubeconfig in the sandbox has no credentials, so the agent never sees the token. A token from `oc login` in the sandbox would go in `~/.kube/config`, where every agent can read it.
+- The token comes from `oc create token` and expires after 90 days.
 
 ## Orca per-workspace environments (considered, not used)
 
