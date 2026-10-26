@@ -114,6 +114,19 @@ foreach ($p in $opencode.provider.PSObject.Properties) {
         $p.Value.options.apiKey = "{env:$var}"
     }
 }
+
+# The sandbox has no OAuth token for intility-id. Use the sbx MCP gateway,
+# like Claude does. The proxy adds the token. The entry name stays the same,
+# so the tool names still match the rules in opencode-managed.json.
+if ($opencode.mcp -and $opencode.mcp.PSObject.Properties['intility-id']) {
+    $opencode.mcp.'intility-id' = [pscustomobject]@{
+        type    = 'remote'
+        url     = 'http://mcp-gateway.docker.internal/mcp'
+        headers = [pscustomobject]@{ Authorization = 'Bearer proxy-managed' }
+        oauth   = $false
+        enabled = $true
+    }
+}
 Write-JsonFile $opencode (Join-Path $home_ '.config\opencode\opencode.json')
 
 # --- validate ----------------------------------------------------------------
