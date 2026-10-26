@@ -1,7 +1,7 @@
 # Project mixin for the intility-id sandbox (kit schema v2).
 # Gives `oc` read access to the intility-id cluster. The proxy injects a
 # ServiceAccount token with the `view` role. The agent never sees the token.
-# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id
+# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id --static-mcp intility-id
 # Set the token with: sbx secret set openshift-intility-id --sandbox intility-id
 schemaVersion: "2"
 kind: mixin

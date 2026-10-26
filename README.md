@@ -66,7 +66,7 @@ A project kit in `kits/<project>/` adds the access that only one project needs, 
 sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id --static-mcp intility-id
 ```
 
-A project kit has no `files/`, so you can also add it to a sandbox that exists: `sbx kit add <name> .\kits\<project>`. This recreates the sandbox container. Clone the repo again after it. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
+`sbx kit add` does not accept a kit that declares credentials. To add a project kit to a sandbox that exists, remove the sandbox and create it again. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
 
 ## Start workers
 
