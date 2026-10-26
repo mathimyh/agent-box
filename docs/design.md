@@ -18,7 +18,7 @@ The kit in `sbx-kit/` adds the user's config and tools to the built-in `claude` 
 | Worktree location | Inside the sandbox | git on a Linux file system is fast (`git status` in 0.03 s). A bind mount from Windows took 13 to 19 s. |
 | Orca integration | SSH "Run on" target | Orca runs its daemon and status hooks in the sandbox. Agents start from the Orca UI or with `worker-start`. |
 | Secrets | `sbx secret` | The proxy injects the real token for the target domain. The agent sees only a placeholder. |
-| Grain | One sandbox per repo | The sandbox `spike` is a throwaway name. |
+| Grain | One sandbox per project, with a scoped GitHub token | A worker can only reach the repos of its project. Set the token with `sbx secret set github --sandbox <name>`. Decided 2026-10-26, not done yet: the token is global now. |
 
 Known trade-off: all worktrees and the main checkout share one file system and one user. Only the brief stops a worker from changing main or a sibling worktree.
 
