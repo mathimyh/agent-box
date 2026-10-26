@@ -26,8 +26,11 @@ Run the commands in PowerShell from the agent-box folder.
 
    ```powershell
    sbx secret set github --command "gh auth token"
-   sbx secret set intility-glm-5-3 -t <key>
+   sbx secret set intility-glm-5-3
+   sbx secret set npm-intility
    ```
+
+   Each command asks for the value. For `npm-intility`, run `npm login --registry https://npm.intility.com --auth-type=legacy` on the host first, with your `aaXXX` account. Then use the `_authToken` value from your `~/.npmrc`.
 
 3. Stage your host config into the kit. Run this again after you change skills, plugins or settings on the host.
 

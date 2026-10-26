@@ -39,13 +39,15 @@ credentials:
         - domain: aa1359-glm53-c487a184-llm.ai.intility.app
           header: Authorization
           scheme: bearer
-  - service: intility-glm-5-3-flash
-    description: opencode provider intility-glm-5-3-flash
+  # npm.intility.com token from `npm login --auth-type=legacy` on the host.
+  # npm sends no auth itself. The proxy adds the header.
+  - service: npm-intility
+    description: npm.intility.com registry token
     apiKey:
-      name: OPENCODE_API_KEY_INTILITY_GLM_5_3_FLASH
+      name: NPM_INTILITY_TOKEN
       proxyManaged: true
       inject:
-        - domain: aa139-glm5-3-beta-378b1531-llm.ai.intility.app
+        - domain: npm.intility.com
           header: Authorization
           scheme: bearer
 

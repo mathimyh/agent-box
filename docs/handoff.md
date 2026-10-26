@@ -13,9 +13,7 @@ Date: 2026-10-26. Read `README.md` and `docs/design.md` first.
 
 ## Open
 
-1. `sbx-kit/spec.yaml` still declares the credential `intility-glm-5-3-flash`. It does no harm. Remove it at the next kit change.
-2. `opencode-managed.json` allows `/scratch/**`. The sandbox uses `/home/agent/scratch`. Change it at the next kit change.
-3. One sandbox per repo is the plan. `spike` is a throwaway name. Give the sandbox a real name at the next recreate.
-4. If the GLM keys in `~/.config/opencode/opencode.json` on the host are not rotated yet, rotate them. They are in plain text there.
-5. The host has 6 stale plugin entries (`ai-go-live` and `mcp-builder` from dadp-skills). Run `claude plugin marketplace update dadp-skills` or uninstall them.
-6. Not checked in the sandbox: `packages/access-tree` in intility-id failed `npm ci` with E401 in the old containers. It has its own `.npmrc`.
+1. The kit now has the credential `npm-intility` for `npm.intility.com`, and no flash credential. Recreate the sandbox as `intility-id` (not `spike`) to apply it. Then change the Orca SSH host to `intility-id.sbx`. Not verified yet: `npm ci` in the Portal works through the proxy, and `~/.npmrc` in the sandbox holds no token.
+2. If the GLM keys in `~/.config/opencode/opencode.json` on the host are not rotated yet, rotate them. They are in plain text there.
+3. The host has 6 stale plugin entries (`ai-go-live` and `mcp-builder` from dadp-skills). Run `claude plugin marketplace update dadp-skills` or uninstall them.
+4. Not checked in the sandbox: `packages/access-tree` in intility-id failed `npm ci` with E401 in the old containers. It has its own `.npmrc`.
