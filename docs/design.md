@@ -67,7 +67,7 @@ Facts learned:
 
 ## GitHub token per sandbox
 
-Each sandbox gets a fine-grained token for the repos of its project. A secret set with `--sandbox` overrides the global `github` secret for that sandbox. Tested 2026-10-26 on `intility-id`: the selected repo had read and push access, and a private repo that was not selected returned 404.
+Each sandbox gets a fine-grained token for the repos of its project. There is no global `github` secret. A sandbox without a per-sandbox token has no GitHub access, so a missing token fails closed instead of falling back to the full host token. Tested 2026-10-26 on `intility-id`: the selected repo had read and push access, and a private repo that was not selected returned 404.
 
 Token settings:
 
