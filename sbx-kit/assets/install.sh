@@ -7,6 +7,14 @@ set -eu
 ASSETS=/home/agent/.local/share/agent-box
 export DEBIAN_FRONTEND=noninteractive
 
+# Pinned tool versions: opencode, npm and oc. Two sandboxes created on
+# different days get the same versions. Change a pin on purpose. After an
+# opencode change, run `opencode debug config` in a new sandbox and check
+# that the project config is still hidden. See docs/design.md.
+OPENCODE_VERSION=1.19.3
+NPM_VERSION=11.21.1
+OC_VERSION=4.15.59
+
 # .NET needs ICU. jq merges the Claude config below.
 apt-get update
 apt-get install -y --no-install-recommends libicu-dev jq
@@ -20,19 +28,25 @@ if [ ! -x /usr/share/dotnet/dotnet ]; then
 fi
 ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
 
-# OpenShift client.
+# OpenShift client, pinned. The checksum comes from the same mirror
+# directory. The install stops when the archive does not match it.
 if [ ! -x /usr/local/bin/oc ]; then
-  curl -fsSL https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.15/openshift-client-linux.tar.gz \
-    | tar -xz -C /usr/local/bin oc kubectl
+  oc_base="https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$OC_VERSION"
+  curl -fsSL "$oc_base/openshift-client-linux.tar.gz" -o /tmp/openshift-client-linux.tar.gz
+  curl -fsSL "$oc_base/sha256sum.txt" -o /tmp/ocp-sha256sum.txt
+  grep ' openshift-client-linux.tar.gz$' /tmp/ocp-sha256sum.txt > /tmp/ocp-check.txt
+  (cd /tmp && sha256sum -c ocp-check.txt)
+  tar -xzf /tmp/openshift-client-linux.tar.gz -C /usr/local/bin oc kubectl
+  rm -f /tmp/openshift-client-linux.tar.gz /tmp/ocp-sha256sum.txt /tmp/ocp-check.txt
 fi
 
 # The image has Ubuntu's npm 9.2.0. With Node 22 it fails `npm ci` with
 # ECONNRESET ("aborted") when it downloads many packages.
-npm install -g npm@11
+npm install -g "npm@$NPM_VERSION"
 
 # opencode, with the approved permissions as managed config.
 # See opencode-managed.json in the agent-box repo.
-command -v opencode >/dev/null 2>&1 || npm install -g opencode-ai
+command -v opencode >/dev/null 2>&1 || npm install -g "opencode-ai@$OPENCODE_VERSION"
 mkdir -p /etc/opencode
 cp "$ASSETS/opencode-managed.json" /etc/opencode/opencode.json
 # opencode tells the agent it can write to /tmp/opencode. Without this,
