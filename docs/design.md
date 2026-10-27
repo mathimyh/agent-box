@@ -32,7 +32,7 @@ Known trade-off: all worktrees and the main checkout share one file system and o
 | `sbx-kit/assets/agent-config.sh` | Merges the staged Claude config into the agent user's home. |
 | `sbx-kit/assets/claude-json.json` | First-run flags for `~/.claude.json`. |
 | `sbx-kit/assets/sandbox-instructions.md` | Sandbox note. Appended to `CLAUDE.md` in the sandbox. |
-| `opencode-managed.json` | Approved opencode permissions. See "opencode permissions". |
+| `opencode-managed.json` | Approved opencode permissions. See "Agent permissions". |
 | `kits/<project>/spec.yaml` | Project kit. See "Project kits". |
 
 ## Docker Sandboxes kit
@@ -77,9 +77,11 @@ Token settings:
 
 Two tokens (read on all repos, write on one) do not work. The proxy selects the token by domain, not by repo. Contents write also allows a push to `main`, so the selected repos need branch protection that requires a PR.
 
-## opencode permissions
+## Agent permissions
 
-Enterprise policy blocks `--dangerously-skip-permissions` for Claude, so Claude asks for permissions as usual. opencode has no such policy. Its approved permissions are in `opencode-managed.json`.
+Orca starts Claude in the sandbox with `--dangerously-skip-permissions`, so Claude does not ask for permissions (verified 2026-10-27). The staged settings set `skipDangerousModePermissionPrompt` and `bypassPermissionsModeAccepted`. These flags suppress the acceptance prompt for bypass mode, so an unattended worker does not stop at startup. The sandbox and its network policy are the security boundary.
+
+opencode has no bypass flag. Its approved permissions are in `opencode-managed.json`.
 
 - The install step copies the file to `/etc/opencode/opencode.json`. This is opencode's managed config on Linux. It has a higher priority than the user config and the project config.
 - The sandbox sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`. The last matching permission rule wins, and a merged key keeps the position of the layer that added it first. Without the flag, an `opencode.json` in the repo could put a key such as `*.env` before `*` and so cancel the deny. The flag is in the opencode binary but not documented. Verified with opencode 1.19.3 and `opencode debug config`.

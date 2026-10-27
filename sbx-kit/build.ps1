@@ -100,7 +100,9 @@ Write-TextFile "[user]`n`tname = $name`n`temail = $email`n" (Join-Path $assets '
 # settings.json: allow list only. The permission mode stays the one the
 # agent kit sets.
 $settings = Convert-ClaudeSettings (Convert-JsonFile (Join-Path $claudeDir 'settings.json'))
-# No prompt for --dangerously-skip-permissions, which Orca passes.
+# Orca starts Claude with --dangerously-skip-permissions. The two flags
+# suppress the acceptance prompt for bypass mode, so an unattended worker
+# does not stop at startup. See "Agent permissions" in docs/design.md.
 $settings | Add-Member -NotePropertyName skipDangerousModePermissionPrompt -NotePropertyValue $true -Force
 $settings | Add-Member -NotePropertyName bypassPermissionsModeAccepted -NotePropertyValue $true -Force
 Write-JsonFile $settings (Join-Path $assets 'claude-settings.json')
