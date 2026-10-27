@@ -1,8 +1,9 @@
 # agent-box mixin for Docker Sandboxes (kit schema v2).
 # Adds the host's skills, plugins, Claude settings and git identity, plus the
 # .NET SDK, oc and opencode, to the built-in `claude` or `opencode` agent.
-# Run build.ps1 first. It fills files/ from the host config.
-# Use: sbx kit add <sandbox> ./sbx-kit   or   sbx create claude --kit ./sbx-kit
+# Run build.ps1 first. It fills files/ from the host config and generates
+# sbx-kit.local/ with the personal model credentials.
+# Use: sbx create claude --kit ./sbx-kit --kit ./sbx-kit.local
 schemaVersion: "2"
 kind: mixin
 name: agent-box
@@ -44,18 +45,11 @@ permissions:
       - opencode.ai
       - models.opencode.ai
 
-# opencode API keys. The proxy injects the real key for the domain. The agent
-# only sees a placeholder. Set with: sbx secret set <service> -t <key>
+# Shared credentials. The proxy injects the real key for the domain. The
+# agent only sees a placeholder. Set with: sbx secret set <service> -t <key>
+# Personal opencode model credentials are not committed here: build.ps1
+# generates them from the host config into sbx-kit.local/spec.yaml.
 credentials:
-  - service: intility-glm-5-3
-    description: opencode provider intility-glm-5-3
-    apiKey:
-      name: OPENCODE_API_KEY_INTILITY_GLM_5_3
-      proxyManaged: true
-      inject:
-        - domain: aa1359-glm53-c487a184-llm.ai.intility.app
-          header: Authorization
-          scheme: bearer
   # npm.intility.com token from `npm login --auth-type=legacy` on the host.
   # npm sends no auth itself. The proxy adds the header.
   - service: npm-intility

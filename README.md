@@ -21,25 +21,25 @@ Run the commands in PowerShell from the agent-box folder.
    sbx policy init balanced
    ```
 
-2. Store the secrets (one time). The proxy injects them. The agent sees only a placeholder.
-
-   ```powershell
-   sbx secret set intility-glm-5-3
-   sbx secret set npm-intility
-   ```
-
-   Each command asks for the value. For `npm-intility`, run `npm login --registry https://npm.intility.com --auth-type=legacy` on the host first, with your `aaXXX` account. Then use the `_authToken` value from your `~/.npmrc`.
-
-3. Stage your host config into the kit. Run this again after you change skills, plugins or settings on the host.
+2. Stage your host config into the kit. Run this again after you change skills, plugins or settings on the host. The build also generates `sbx-kit.local\`, a kit with one credential per opencode model provider in your host config. It is not committed.
 
    ```powershell
    .\sbx-kit\build.ps1
    ```
 
+3. Store the secrets (one time). The proxy injects them. The agent sees only a placeholder.
+
+   ```powershell
+   sbx secret set <provider>
+   sbx secret set npm-intility
+   ```
+
+   One `sbx secret set` per opencode provider in your host `~/.config/opencode/opencode.json` that has an API key. The service names are listed in `sbx-kit.local\spec.yaml`. Each command asks for the value. For `npm-intility`, run `npm login --registry https://npm.intility.com --auth-type=legacy` on the host first, with your `aaXXX` account. Then use the `_authToken` value from your `~/.npmrc`.
+
 4. Create the sandbox. Use one sandbox per repo.
 
    ```powershell
-   sbx create claude --name <name> --kit .\sbx-kit --static-mcp intility-id
+   sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local --static-mcp intility-id
    ```
 
    Then set a fine-grained GitHub token for the repos of this sandbox. The command asks for the value. See "GitHub token per sandbox" in `docs/design.md` for the token settings. There is no global `github` secret. The sandbox has no GitHub access until you set this token, so a missing token fails closed instead of using the host token.
@@ -54,14 +54,14 @@ Run the commands in PowerShell from the agent-box folder.
 
 ## Change the kit
 
-`sbx kit add` does not accept this kit. To apply a kit change, remove the sandbox and create it again (step 3 to 6). Everything in the sandbox is lost, also clones and worktrees.
+`sbx kit add` does not accept this kit. To apply a kit change, remove the sandbox and create it again (step 2 to 6). Everything in the sandbox is lost, also clones and worktrees.
 
 ## Project kits
 
-A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`. Add it with a second `--kit` at create:
+A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`. Add it with another `--kit` at create:
 
 ```powershell
-sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id --static-mcp intility-id
+sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\intility-id --static-mcp intility-id
 ```
 
 `sbx kit add` does not accept a kit that declares credentials. To add a project kit to a sandbox that exists, remove the sandbox and create it again. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
