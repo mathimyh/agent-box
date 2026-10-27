@@ -27,6 +27,7 @@ Known trade-off: all worktrees and the main checkout share one file system and o
 | File | Purpose |
 |---|---|
 | `sbx-kit/spec.yaml` | Kit spec (schema v2): network allow list, opencode credentials, agent instructions, install step. |
+| `sbx-kit/allowlist.txt` | Skills, commands and plugins to stage into the sandbox. Everything else stays on the host. |
 | `sbx-kit/build.ps1` | Stages the host config into `sbx-kit/files/` (not committed). |
 | `sbx-kit/assets/install.sh` | Install step. Runs as root at `sbx create`. |
 | `sbx-kit/assets/agent-config.sh` | Merges the staged Claude config into the agent user's home. |
@@ -44,9 +45,9 @@ sbx rm <name>; sbx create claude --name <name> --kit .\sbx-kit --static-mcp inti
 
 Everything in the sandbox is lost: clones, worktrees and the Orca project setup. Clone the repo again after the create.
 
-What `build.ps1` stages into `files/home/` (about 100 MB):
+What `build.ps1` stages into `files/home/` (about 15 MB):
 
-- `~/.claude/skills` (without `synced`), `commands`, `plugins/cache`, `plugins/marketplaces` (without `temp_*`) and the two plugin registries with paths changed to `/home/agent`. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
+- The allow-listed skills, commands and plugins, per `allowlist.txt`. For plugins: only the cache versions the registry entries point at, only the marketplaces those plugins need, and both plugin registries filtered to match, with paths changed to `/home/agent`. A listed name missing on the host fails the build. An allow list was chosen over a deny list to keep the worker context small: every staged skill costs its description in every worker session. The staged size drops from about 100 MB to about 15 MB, mostly because the `anthropic-agent-skills` marketplace (no installed plugins) and the `mattpocock-skills` cache (41 MB, mostly bundled `node_modules`) stay out. The `enabledPlugins` flags in the staged settings keep only allowed plugins, and the build fails when none match, so a key-format change cannot silently disable all plugins. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
 - The shared agent rules. `~/.config/opencode/AGENTS.md` is the source of truth for both host agents, because opencode reads it natively as global rules and Claude Code has no user-level AGENTS.md: the host `~/.claude/CLAUDE.md` is a one-line `@` import of it. `build.ps1` strips the marked host-only blocks (Windows, PowerShell, the host skill store, host Orca dispatch) and stages the rest as both `~/.claude/CLAUDE.md` and `~/.config/opencode/AGENTS.md`. The sandbox note is `agentInstructions.content` in `spec.yaml`; the engine writes it to the kit memory and links it from the generated AI file, so every agent in the sandbox loads it.
 - `~/.config/opencode/opencode.json` with each `apiKey` replaced by `{env:OPENCODE_API_KEY_<PROVIDER>}`. `spec.yaml` declares one proxy-managed credential per provider. Set the keys with `sbx secret set <provider> -t <key>`. The `intility-id` MCP entry points at the sbx MCP gateway (`http://mcp-gateway.docker.internal/mcp`), the same server that Claude uses. The sandbox has no OAuth token for the direct URL, and the proxy adds the token for the gateway.
 - No npm token. `spec.yaml` declares the credential `npm-intility`, and the proxy adds `Authorization: Bearer <token>` to each request to `npm.intility.com`. npm in the sandbox has no auth config. `npm login` in the sandbox is not necessary, and it would put the token in a file that every worker can read.
