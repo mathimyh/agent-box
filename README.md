@@ -10,7 +10,6 @@ See `docs/design.md` for the design and the rules learned.
 
 - Windows with Docker Sandboxes: `winget install Docker.sbx`
 - Orca 1.4.237 or later
-- `gh` logged in on the host
 
 ## Set up a sandbox
 
@@ -25,7 +24,6 @@ Run the commands in PowerShell from the agent-box folder.
 2. Store the secrets (one time). The proxy injects them. The agent sees only a placeholder.
 
    ```powershell
-   sbx secret set github --command "gh auth token"
    sbx secret set intility-glm-5-3
    sbx secret set npm-intility
    ```
@@ -44,7 +42,7 @@ Run the commands in PowerShell from the agent-box folder.
    sbx create claude --name <name> --kit .\sbx-kit --static-mcp intility-id
    ```
 
-   Then set a fine-grained GitHub token for the repos of this sandbox. The command asks for the value. See "GitHub token per sandbox" in `docs/design.md` for the token settings.
+   Then set a fine-grained GitHub token for the repos of this sandbox. The command asks for the value. See "GitHub token per sandbox" in `docs/design.md` for the token settings. There is no global `github` secret. The sandbox has no GitHub access until you set this token, so a missing token fails closed instead of using the host token.
 
    ```powershell
    sbx secret set github --sandbox <name>
