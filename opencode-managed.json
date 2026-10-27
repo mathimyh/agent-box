@@ -26,13 +26,6 @@
     "webfetch": "allow",
     "websearch": "allow",
     "task": "allow",
-    "intility-id_*": "ask",
-    "intility-id_id_get_*": "allow",
-    "intility-id_id_list_*": "allow",
-    "intility-id_id_check_*": "allow",
-    "intility-id_id_batch_check": "allow",
-    "intility-id_id_describe_*": "allow",
-    "intility-id_id_preview_delete": "allow",
     "external_directory": {
       "*": "ask",
       "/home/agent/scratch/**": "allow"

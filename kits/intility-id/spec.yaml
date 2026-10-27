@@ -1,14 +1,26 @@
 # Project mixin for the intility-id sandbox (kit schema v2).
-# Gives `oc` read access to the intility-id cluster. The proxy injects a
-# ServiceAccount token with the `view` role. The agent never sees the token.
-# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\kits\intility-id --static-mcp intility-id
+# Gives `oc` read access to the intility-id cluster, and gives opencode the
+# Intility ID MCP tools. The proxy injects a ServiceAccount token with the
+# `view` role. The agent never sees the token.
+# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\intility-id --static-mcp intility-id
 # Set the token with: sbx secret set openshift-intility-id --sandbox intility-id
+#
+# Kit order is load-bearing: pass .\sbx-kit before this kit. The opencode
+# commands below merge into the files that the base kit writes. When the
+# base kit is missing, the merge fails the create loudly.
+#
+# Notes on the access this kit gives:
+# - The `view` ClusterRole also reads pod logs and ConfigMaps. Pod logs can
+#   hold secrets. Read only what the task needs.
+# - The ServiceAccount token expires after 90 days. Nothing rotates it and
+#   nothing sends a reminder. Set your own reminder, or create a new token
+#   with `oc create token` and set it again before it expires.
 schemaVersion: "2"
 kind: mixin
 name: intility-id
 version: "0.1.0"
-displayName: intility-id cluster (read)
-description: Read access with oc to the intility-id OpenShift cluster.
+displayName: intility-id cluster (read) and MCP tools
+description: Read access with oc to the intility-id OpenShift cluster, and the Intility ID MCP tools for opencode.
 
 permissions:
   network:
@@ -26,6 +38,11 @@ credentials:
           header: Authorization
           scheme: bearer
 
+# opencode-patch.json (under files/) holds the permission rules and the MCP
+# entry. The rules ask first and allow only the read tools. The MCP entry
+# points at the sbx gateway, the same server Claude uses. The proxy adds the
+# token. The sandbox has no OAuth token for the direct URL.
+#
 # A kubeconfig without credentials. oc sends no token, and the proxy adds it.
 setup:
   install:
@@ -36,3 +53,19 @@ setup:
         oc config use-context intility-id
       user: "1000"
       description: kubeconfig for the intility-id cluster
+    - command: >-
+        jq -s '.[0].permission = (.[0].permission * .[1].permission) | .[0]'
+        /etc/opencode/opencode.json
+        /home/agent/.local/share/agent-box/intility-id/opencode-patch.json
+        > /etc/opencode/opencode.json.tmp &&
+        mv /etc/opencode/opencode.json.tmp /etc/opencode/opencode.json
+      user: "0"
+      description: opencode permissions for the Intility ID tools
+    - command: >-
+        jq -s '.[0].mcp = ((.[0].mcp // {}) * .[1].mcp) | .[0]'
+        /home/agent/.config/opencode/opencode.json
+        /home/agent/.local/share/agent-box/intility-id/opencode-patch.json
+        > /home/agent/.config/opencode/opencode.json.tmp &&
+        mv /home/agent/.config/opencode/opencode.json.tmp /home/agent/.config/opencode/opencode.json
+      user: "1000"
+      description: intility-id MCP entry for opencode, through the sbx gateway

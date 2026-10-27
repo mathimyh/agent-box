@@ -10,7 +10,7 @@ Fills sbx-kit/files/home/ from the host:
 - ~/.config/opencode/AGENTS.md with the host-only blocks stripped, staged as
   ~/.claude/CLAUDE.md and ~/.config/opencode/AGENTS.md
 - ~/.config/opencode/opencode.json with API keys replaced by env references
-  and secret-bearing MCP fields dropped
+  and the mcp section dropped
 - git identity
 Also writes sbx-kit.local/spec.yaml (not committed): one credential per
 opencode provider that carries an API key, with its endpoint domain from the
@@ -361,29 +361,14 @@ Write-TextFile (Convert-HostPath ($knownOut | ConvertTo-Json -Depth 50)) (Join-P
 $opencode = Convert-JsonFile (Join-Path $HOME '.config\opencode\opencode.json')
 $providers = Convert-ProviderApiKeys $opencode
 
-# MCP secrets: headers and environment hold tokens in plain text. Drop both,
-# so an unknown MCP entry fails closed instead of leaking its credentials.
-if ($opencode.mcp) {
-    foreach ($m in $opencode.mcp.PSObject.Properties) {
-        foreach ($key in 'headers', 'environment') {
-            if ($m.Value -and $m.Value.PSObject.Properties[$key]) {
-                $m.Value.PSObject.Properties.Remove($key)
-            }
-        }
-    }
-}
-
-# The sandbox has no OAuth token for intility-id. Use the sbx MCP gateway,
-# like Claude does. The proxy adds the token. The entry name stays the same,
-# so the tool names still match the rules in opencode-managed.json.
-if ($opencode.mcp -and $opencode.mcp.PSObject.Properties['intility-id']) {
-    $opencode.mcp.'intility-id' = [pscustomobject]@{
-        type    = 'remote'
-        url     = 'http://mcp-gateway.docker.internal/mcp'
-        headers = [pscustomobject]@{ Authorization = 'Bearer proxy-managed' }
-        oauth   = $false
-        enabled = $true
-    }
+# The mcp section is not staged. Its entries point at the host's direct
+# server URLs, and their headers and environment can hold secrets in plain
+# text. The sandbox has no OAuth tokens for them. opencode reaches an MCP
+# server only through a project kit, which adds the sbx MCP gateway entry and
+# the permission rules for it. See the kits\ directory and "Project kits" in
+# docs/design.md.
+if ($opencode.PSObject.Properties['mcp']) {
+    $opencode.PSObject.Properties.Remove('mcp')
 }
 Write-JsonFile $opencode (Join-Path $home_ '.config\opencode\opencode.json')
 
@@ -419,7 +404,11 @@ if ($hits) {
 
 $sbx = Join-Path $env:LOCALAPPDATA 'DockerSandboxes\bin\sbx.exe'
 if (-not (Test-Path $sbx)) { $sbx = 'sbx' }
-foreach ($kit in @($root, $localKit)) {
+# The project kits under kits\ are committed. Validate them too, so a spec
+# grammar error fails the build and not the next sandbox create.
+$kits = @($root, $localKit)
+$kits += Get-ChildItem -LiteralPath (Join-Path $repo 'kits') -Directory | ForEach-Object { $_.FullName }
+foreach ($kit in $kits) {
     & $sbx kit validate $kit --offline
     if ($LASTEXITCODE -ne 0) { throw "sbx kit validate failed for $kit" }
 }
