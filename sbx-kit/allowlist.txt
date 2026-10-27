@@ -1,0 +1,29 @@
+# What build.ps1 stages from the host skill and plugin config. Everything
+# else stays on the host. A listed name that is missing on the host fails
+# the build, so a typo cannot silently drop a skill from the sandbox.
+# Rules of thumb: no GUI skills (no display in the sandbox), no host-side
+# or cluster onboarding skills, and no duplicates of the id-companion
+# plugin skills (keep one copy per skill).
+
+[skills]
+handoff
+grill-with-docs
+improve-codebase-architecture
+orca-cli
+orca-workers
+orchestration
+release-please
+# Intility ID skills. The kit is shared by every project sandbox; these
+# five cost one description each in unrelated projects.
+getting-started
+sdk-integration
+id-authorization-modeling
+id-grant-operations
+id-troubleshooting
+
+[commands]
+update-docs.md
+
+[plugins]
+code-review@claude-plugins-official
+csharp-lsp@claude-plugins-official
