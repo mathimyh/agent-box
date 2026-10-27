@@ -5,10 +5,13 @@ Stage the host config into the agent-box sandbox kit and validate it.
 .DESCRIPTION
 Fills sbx-kit/files/home/ from the host:
 - ~/.claude/skills, commands, plugins (cache and marketplaces, paths rewritten)
-- ~/.claude/settings.json without hooks, status line and permission mode
+- ~/.claude/settings.json: allow-listed keys only, without the permission mode
 - ~/.claude/CLAUDE.md with the sandbox note appended
 - ~/.config/opencode/opencode.json with API keys replaced by env references
+  and secret-bearing MCP fields dropped
 - git identity
+Then scans files/ for token patterns and stops the build on a match. The
+error names the file only, never the value.
 Run it again after you change plugins, skills or settings on the host.
 Then: sbx kit add <sandbox> .\sbx-kit
 #>
@@ -49,6 +52,35 @@ function Convert-HostPath {
     return [regex]::Replace($Text, '/home/agent/\.claude(?:\\\\[^"\\]+)+', { param($m) $m.Value -replace '\\\\', '/' })
 }
 
+# Claude settings: keep only allow-listed keys. Every other host key (for
+# example env or apiKeyHelper) stays out of the sandbox.
+function Convert-ClaudeSettings {
+    param($Settings)
+    $allowed = 'permissions', 'enabledPlugins', 'model', 'modelSettings'
+    $out = [pscustomobject]@{}
+    foreach ($key in $allowed) {
+        if ($Settings.PSObject.Properties[$key]) {
+            $out | Add-Member -NotePropertyName $key -NotePropertyValue $Settings.$key
+        }
+    }
+    # The permission mode stays the one the agent kit sets.
+    if ($out.permissions -and $out.permissions.PSObject.Properties['defaultMode']) {
+        $out.permissions.PSObject.Properties.Remove('defaultMode')
+    }
+    return $out
+}
+
+# Files that hold a token pattern: GitHub PATs (classic and fine-grained),
+# sk- API keys, a long Bearer value, an npmrc _authToken line. Short strings
+# such as "Bearer proxy-managed" stay under the length bounds.
+function Find-StagedToken {
+    param([string]$Directory)
+    $pattern = 'ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:ant-[A-Za-z0-9-]{20,}|proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{20,})|Bearer\s+[A-Za-z0-9._~+/=-]{20,}|_authToken'
+    Get-ChildItem -LiteralPath $Directory -Recurse -File | Where-Object {
+        [regex]::IsMatch([System.IO.File]::ReadAllText($_.FullName), $pattern)
+    } | ForEach-Object { $_.FullName }
+}
+
 # --- reset ------------------------------------------------------------------
 
 if (Test-Path (Join-Path $root 'files')) { Remove-Item (Join-Path $root 'files') -Recurse -Force }
@@ -65,15 +97,9 @@ $name = git config --global user.name
 $email = git config --global user.email
 Write-TextFile "[user]`n`tname = $name`n`temail = $email`n" (Join-Path $assets 'gitconfig')
 
-# settings.json without host-only keys. The permission mode stays the one the
+# settings.json: allow list only. The permission mode stays the one the
 # agent kit sets.
-$settings = Convert-JsonFile (Join-Path $claudeDir 'settings.json')
-foreach ($key in 'hooks', 'statusLine') {
-    if ($settings.PSObject.Properties[$key]) { $settings.PSObject.Properties.Remove($key) }
-}
-if ($settings.permissions -and $settings.permissions.PSObject.Properties['defaultMode']) {
-    $settings.permissions.PSObject.Properties.Remove('defaultMode')
-}
+$settings = Convert-ClaudeSettings (Convert-JsonFile (Join-Path $claudeDir 'settings.json'))
 # No prompt for --dangerously-skip-permissions, which Orca passes.
 $settings | Add-Member -NotePropertyName skipDangerousModePermissionPrompt -NotePropertyValue $true -Force
 $settings | Add-Member -NotePropertyName bypassPermissionsModeAccepted -NotePropertyValue $true -Force
@@ -113,6 +139,23 @@ foreach ($p in $opencode.provider.PSObject.Properties) {
         $var = 'OPENCODE_API_KEY_' + ($p.Name.ToUpperInvariant() -replace '[^A-Z0-9]', '_')
         $p.Value.options.apiKey = "{env:$var}"
     }
+    # Custom providers can send headers with a token. Drop them: opencode
+    # does not expand {env:} there.
+    if ($p.Value.options -and $p.Value.options.PSObject.Properties['headers']) {
+        $p.Value.options.PSObject.Properties.Remove('headers')
+    }
+}
+
+# MCP secrets: headers and environment hold tokens in plain text. Drop both,
+# so an unknown MCP entry fails closed instead of leaking its credentials.
+if ($opencode.mcp) {
+    foreach ($m in $opencode.mcp.PSObject.Properties) {
+        foreach ($key in 'headers', 'environment') {
+            if ($m.Value -and $m.Value.PSObject.Properties[$key]) {
+                $m.Value.PSObject.Properties.Remove($key)
+            }
+        }
+    }
 }
 
 # The sandbox has no OAuth token for intility-id. Use the sbx MCP gateway,
@@ -128,6 +171,16 @@ if ($opencode.mcp -and $opencode.mcp.PSObject.Properties['intility-id']) {
     }
 }
 Write-JsonFile $opencode (Join-Path $home_ '.config\opencode\opencode.json')
+
+# --- scan ---------------------------------------------------------------------
+# Stop the build when a staged file holds a token pattern. The error names
+# the file only, never the matched value.
+
+$hits = Find-StagedToken (Join-Path $root 'files')
+if ($hits) {
+    $names = @($hits) | ForEach-Object { $_.Substring($root.Length + 1) }
+    throw "Token pattern found in staged files:`n$($names -join "`n")"
+}
 
 # --- validate ----------------------------------------------------------------
 
