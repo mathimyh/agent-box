@@ -1,6 +1,6 @@
 #!/bin/sh
-# Kit install step. Runs once as root when the sandbox is created or when the
-# kit is added with `sbx kit add`. The kit files are already in /home/agent.
+# Kit install step. Runs once as root when the sandbox is created. `sbx kit
+# add` refuses this kit: it declares files/ and credentials.
 # Every step is safe to run again.
 set -eu
 
