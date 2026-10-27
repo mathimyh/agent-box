@@ -23,7 +23,7 @@ agentInstructions:
     - Write handoffs and other files for the user to `docs/` in the worktree, or to `/home/agent/scratch`. The user reads them with `sbx exec` or over SSH.
     - Write temporary files (for example a PR body) to `/home/agent/scratch`, not to `/tmp`.
     - `gh` is already authenticated through the sandbox proxy. Do not run `gh auth` commands. They need a permission the sandbox does not give.
-    - Do not run `git worktree prune`.
+    - Do not run `git worktree prune`. It touches every worktree of the repo, also the ones Orca and other workers use at the same time. A registration that looks stale can be a worktree in use, and Orca then loses it.
     - Orca commands: the `orca` CLI sees only this sandbox. Use `--worktree path:/home/agent/orca/workspaces/<repo>/<worktree>`. Host paths do not resolve.
     - Build tools: `dotnet` (SDK 10), `oc`, `node`, `npm`, `docker`, `opencode`.
     - Docker works, so Testcontainers integration tests run here. Builds write to the normal `bin/` and `obj/` folders.

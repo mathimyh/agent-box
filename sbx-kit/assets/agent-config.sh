@@ -14,7 +14,10 @@ merge() {
 }
 
 # Host settings without host-only keys. Keeps Orca's hooks and the agent
-# kit's permission mode.
+# kit's permission mode. Checked against the built-in claude agent kit: it
+# seeds only scalar flags and permissions.defaultMode, no permissions.allow
+# list. The jq object merge is recursive, so its keys stay; arrays replace,
+# which is correct for the fresh host list.
 merge "$HOME/.claude/settings.json" "$ASSETS/claude-settings.json"
 
 # First-run flags. Without them Claude shows prompts that swallow the first
