@@ -6,7 +6,8 @@ Stage the host config into the agent-box sandbox kit and validate it.
 Fills sbx-kit/files/home/ from the host:
 - ~/.claude/skills, commands, plugins (cache and marketplaces, paths rewritten)
 - ~/.claude/settings.json: allow-listed keys only, without the permission mode
-- ~/.claude/CLAUDE.md with the sandbox note appended
+- ~/.config/opencode/AGENTS.md with the host-only blocks stripped, staged as
+  ~/.claude/CLAUDE.md and ~/.config/opencode/AGENTS.md
 - ~/.config/opencode/opencode.json with API keys replaced by env references
   and secret-bearing MCP fields dropped
 - git identity
@@ -50,6 +51,22 @@ function Convert-HostPath {
     $Text = $Text.Replace($backslash, '/home/agent/.claude').Replace($forward, '/home/agent/.claude')
     # The rest of each rewritten path still has JSON-escaped backslashes.
     return [regex]::Replace($Text, '/home/agent/\.claude(?:\\\\[^"\\]+)+', { param($m) $m.Value -replace '\\\\', '/' })
+}
+
+# Remove the host-only blocks from the shared agent rules. A block is wrapped
+# in `<!-- agent-box: host-only -->` markers. The sandbox keeps the rest.
+# Unbalanced markers throw: half a block would leak host rules.
+function Remove-HostOnlyBlocks {
+    param([string]$Text)
+    $startMarker = '<!-- agent-box: host-only -->'
+    $endMarker = '<!-- /agent-box: host-only -->'
+    $start = [regex]::Matches($Text, [regex]::Escape($startMarker)).Count
+    $end = [regex]::Matches($Text, [regex]::Escape($endMarker)).Count
+    if ($start -ne $end) {
+        throw "Unbalanced host-only markers: $start start markers, $end end markers"
+    }
+    $pattern = '(?s)[ \t]*' + [regex]::Escape($startMarker) + '\r?\n.*?' + [regex]::Escape($endMarker) + '[ \t]*(?:\r?\n)?'
+    return [regex]::Replace($Text, $pattern, '')
 }
 
 # Claude settings: keep only allow-listed keys. Every other host key (for
@@ -109,9 +126,17 @@ Write-JsonFile $settings (Join-Path $assets 'claude-settings.json')
 
 # --- Claude home -------------------------------------------------------------
 
-$claudeMd = Get-Content (Join-Path $claudeDir 'CLAUDE.md') -Raw
-$claudeMd += Get-Content (Join-Path $root 'assets\sandbox-instructions.md') -Raw
-Write-TextFile $claudeMd (Join-Path $home_ '.claude\CLAUDE.md')
+# The shared agent rules come from the opencode AGENTS.md, the source of truth
+# for both host agents (the host ~/.claude/CLAUDE.md is a one-line @ import
+# of it). The sandbox note is agentInstructions.content in spec.yaml: the
+# engine writes it to the kit memory and links it from the generated AI file.
+$agentsPath = Join-Path $HOME '.config\opencode\AGENTS.md'
+if (-not (Test-Path $agentsPath)) {
+    throw "Global agent rules not found: $agentsPath"
+}
+$sharedRules = Remove-HostOnlyBlocks (Get-Content $agentsPath -Raw -Encoding UTF8)
+Write-TextFile $sharedRules (Join-Path $home_ '.claude\CLAUDE.md')
+Write-TextFile $sharedRules (Join-Path $home_ '.config\opencode\AGENTS.md')
 
 # Skills and commands. `synced` is Claude's own sync folder, not a skill.
 Copy-Item (Join-Path $claudeDir 'skills') (Join-Path $home_ '.claude\skills') -Recurse -Exclude 'synced'
