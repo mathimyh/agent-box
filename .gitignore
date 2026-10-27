@@ -2,6 +2,7 @@
 .staging/
 scratch/
 sbx-kit/files/
+sbx-kit.local/
 
 # Per-machine Claude Code settings
 .claude/settings.local.json
