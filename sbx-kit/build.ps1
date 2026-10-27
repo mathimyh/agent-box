@@ -12,6 +12,11 @@ Fills sbx-kit/files/home/ from the host:
 - ~/.config/opencode/opencode.json with API keys replaced by env references
   and the mcp section dropped
 - git identity
+A host file or allow-listed item that is missing on the host is skipped
+with a warning and listed at the end, so a teammate with a different host
+config gets a working kit. That list is the typo guard: an entry you did
+not expect usually means a typo in allowlist.txt. The git identity must
+exist.
 Also writes sbx-kit.local/spec.yaml (not committed): one credential per
 opencode provider that carries an API key, with its endpoint domain from the
 host config. Stops when a provider has no credential with the matching env
@@ -32,6 +37,7 @@ $claudeDir = Join-Path $HOME '.claude'
 $localKit = Join-Path $repo 'sbx-kit.local'
 $home_ = Join-Path $root 'files\home'
 $assets = Join-Path $home_ '.local\share\agent-box'
+$script:skipped = New-Object System.Collections.Generic.List[string]
 
 function Convert-JsonFile {
     param([string]$Path)
@@ -47,6 +53,15 @@ function Write-JsonFile {
 function Write-TextFile {
     param([string]$Text, [string]$Path)
     [System.IO.File]::WriteAllText($Path, $Text.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+}
+
+# Record a host file or allow-listed item that is missing. The build
+# continues without it: a teammate with a different host config must pass.
+# The summary at the end is the typo guard, so nothing drops silently.
+function Add-Skipped {
+    param([string]$Kind, [string]$Name)
+    $script:skipped.Add("$($Kind): $Name")
+    Write-Warning "Skipped $($Kind): $Name"
 }
 
 # Rewrite Windows config paths to the sandbox home.
@@ -126,31 +141,44 @@ function Get-SbxAllowlist {
 }
 
 # Copy only the allowed entries from one host config folder. A listed entry
-# that is missing on the host throws, so a typo cannot silently drop it.
+# that is missing on the host is skipped with a warning and listed in the
+# build summary, so a teammate with a different host config passes. The
+# summary is the typo guard: an allow list entry that is missing for you
+# usually means a typo in allowlist.txt.
 function Copy-AllowedItems {
     param([string[]]$Items, [string]$SourceDir, [string]$TargetDir, [string]$Kind)
+    if (-not (Test-Path $SourceDir)) {
+        foreach ($item in $Items) { Add-Skipped $Kind $item }
+        return
+    }
     New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
     foreach ($item in $Items) {
         $src = Join-Path $SourceDir $item
-        if (-not (Test-Path $src)) { throw "Allowed $Kind not found on the host: $item" }
+        if (-not (Test-Path $src)) {
+            Add-Skipped $Kind $item
+            continue
+        }
         Copy-Item $src (Join-Path $TargetDir $item) -Recurse
     }
 }
 
 # Filter the host plugin config down to the allowed plugins. Returns the
 # filtered installed_plugins registry object, the marketplaces those plugins
-# need, and the cache folders (relative to plugins\cache) to stage. Registry
-# entries keep all scopes: only the allow list decides what is staged.
+# need, the cache folders (relative to plugins\cache) to stage, and the names
+# of the plugins that were staged. Registry entries keep all scopes: only
+# the allow list decides what is staged. A listed plugin that is not
+# installed on the host is skipped with a warning, not an error.
 function Select-AllowedPlugins {
     param($InstalledRegistry, [string[]]$AllowedPlugins, [string]$CacheRoot)
     $out = [pscustomobject]@{
         registry     = [pscustomobject]@{ version = $InstalledRegistry.version; plugins = [pscustomobject]@{} }
         marketplaces = @()
         cacheDirs    = @()
+        staged       = @()
     }
     foreach ($key in $AllowedPlugins) {
         $prop = $InstalledRegistry.plugins.PSObject.Properties[$key]
-        if (-not $prop) { throw "Allowed plugin not installed on the host: $key" }
+        if (-not $prop) { Add-Skipped 'plugin' $key; continue }
         $out.registry.plugins | Add-Member -NotePropertyName $key -NotePropertyValue $prop.Value
         foreach ($entry in @($prop.Value)) {
             $path = $entry.installPath
@@ -162,6 +190,7 @@ function Select-AllowedPlugins {
         }
         $marketplace = $key.Substring($key.IndexOf('@') + 1)
         if ($out.marketplaces -notcontains $marketplace) { $out.marketplaces += $marketplace }
+        $out.staged += $key
     }
     return $out
 }
@@ -262,7 +291,9 @@ function Test-SpecCredential {
 
 if (Test-Path (Join-Path $root 'files')) { Remove-Item (Join-Path $root 'files') -Recurse -Force }
 if (Test-Path $localKit) { Remove-Item $localKit -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $assets, (Join-Path $home_ '.claude\plugins'), (Join-Path $home_ '.config\opencode') | Out-Null
+# The plugins folders are created below, only when a plugin is staged, so a
+# host without plugins stages no empty .claude\plugins tree.
+New-Item -ItemType Directory -Force -Path $assets, (Join-Path $home_ '.claude'), (Join-Path $home_ '.config\opencode') | Out-Null
 
 $allow = Get-SbxAllowlist (Join-Path $root 'allowlist.txt')
 
@@ -277,32 +308,10 @@ Copy-Item (Join-Path $repo 'opencode-managed.json') (Join-Path $assets 'opencode
 
 $name = git config --global user.name
 $email = git config --global user.email
-Write-TextFile "[user]`n`tname = $name`n`temail = $email`n" (Join-Path $assets 'gitconfig')
-
-# settings.json: allow list only. The permission mode stays the one the
-# agent kit sets.
-$settings = Convert-ClaudeSettings (Convert-JsonFile (Join-Path $claudeDir 'settings.json'))
-# Keep the enabledPlugins flags only for allowed plugins. The others are not
-# staged, and a flag for a missing plugin would warn in every session. An
-# empty result throws: it means the flag keys do not match the allow list.
-if ($settings.enabledPlugins) {
-    $keep = [pscustomobject]@{}
-    foreach ($p in $settings.enabledPlugins.PSObject.Properties) {
-        if ($allow.plugins -contains $p.Name) {
-            $keep | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value
-        }
-    }
-    if ($keep.PSObject.Properties.Count -eq 0) {
-        throw 'enabledPlugins names no allowed plugin. Check the plugin keys in allowlist.txt against the host settings.'
-    }
-    $settings.enabledPlugins = $keep
+if (-not $name -or -not $email) {
+    throw 'git identity not set on the host. The sandbox takes it from the host config. Run: git config --global user.name <name> and git config --global user.email <email>'
 }
-# Orca starts Claude with --dangerously-skip-permissions. The two flags
-# suppress the acceptance prompt for bypass mode, so an unattended worker
-# does not stop at startup. See "Agent permissions" in docs/design.md.
-$settings | Add-Member -NotePropertyName skipDangerousModePermissionPrompt -NotePropertyValue $true -Force
-$settings | Add-Member -NotePropertyName bypassPermissionsModeAccepted -NotePropertyValue $true -Force
-Write-JsonFile $settings (Join-Path $assets 'claude-settings.json')
+Write-TextFile "[user]`n`tname = $name`n`temail = $email`n" (Join-Path $assets 'gitconfig')
 
 # --- Claude home -------------------------------------------------------------
 
@@ -311,66 +320,115 @@ Write-JsonFile $settings (Join-Path $assets 'claude-settings.json')
 # of it). The sandbox note is agentInstructions.content in spec.yaml: the
 # engine writes it to the kit memory and links it from the generated AI file.
 $agentsPath = Join-Path $HOME '.config\opencode\AGENTS.md'
-if (-not (Test-Path $agentsPath)) {
-    throw "Global agent rules not found: $agentsPath"
+if (Test-Path $agentsPath) {
+    $sharedRules = Remove-HostOnlyBlocks (Get-Content $agentsPath -Raw -Encoding UTF8)
+    Write-TextFile $sharedRules (Join-Path $home_ '.claude\CLAUDE.md')
+    Write-TextFile $sharedRules (Join-Path $home_ '.config\opencode\AGENTS.md')
+} else {
+    Add-Skipped 'host file' '~\.config\opencode\AGENTS.md'
 }
-$sharedRules = Remove-HostOnlyBlocks (Get-Content $agentsPath -Raw -Encoding UTF8)
-Write-TextFile $sharedRules (Join-Path $home_ '.claude\CLAUDE.md')
-Write-TextFile $sharedRules (Join-Path $home_ '.config\opencode\AGENTS.md')
 
 # Skills and commands: the allow list decides. `synced` (Claude's own sync
 # folder), the trash folder and everything else not listed stay on the host.
 Copy-AllowedItems $allow.skills (Join-Path $claudeDir 'skills') (Join-Path $home_ '.claude\skills') 'skill'
-if (Test-Path (Join-Path $claudeDir 'commands')) {
-    Copy-AllowedItems $allow.commands (Join-Path $claudeDir 'commands') (Join-Path $home_ '.claude\commands') 'command'
-}
+Copy-AllowedItems $allow.commands (Join-Path $claudeDir 'commands') (Join-Path $home_ '.claude\commands') 'command'
 
 # Plugins: the allowed plugins, only the cache versions their registry
 # entries point at, and only the marketplaces they need. The registries are
 # filtered to match, so the sandbox sees no reference to what stayed out.
-$installed = Convert-JsonFile (Join-Path $claudeDir 'plugins\installed_plugins.json')
-$cacheRoot = Join-Path $claudeDir 'plugins\cache'
-$selection = Select-AllowedPlugins $installed $allow.plugins $cacheRoot
-New-Item -ItemType Directory -Force -Path (Join-Path $home_ '.claude\plugins\cache'), (Join-Path $home_ '.claude\plugins\marketplaces') | Out-Null
-foreach ($rel in $selection.cacheDirs) {
-    $src = Join-Path $cacheRoot $rel
-    if (-not (Test-Path $src)) { throw "Allowed plugin cache folder not found on the host: $rel" }
-    $target = Join-Path $home_ ".claude\plugins\cache\$rel"
-    New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
-    Copy-Item $src $target -Recurse
+# A host without the plugin config stages no plugins at all.
+$stagedPlugins = @()
+if (Test-Path (Join-Path $claudeDir 'plugins\installed_plugins.json')) {
+    $installed = Convert-JsonFile (Join-Path $claudeDir 'plugins\installed_plugins.json')
+    $cacheRoot = Join-Path $claudeDir 'plugins\cache'
+    $selection = Select-AllowedPlugins $installed $allow.plugins $cacheRoot
+    $stagedPlugins = @($selection.staged)
+    if ($stagedPlugins.Count -gt 0) {
+        New-Item -ItemType Directory -Force -Path (Join-Path $home_ '.claude\plugins\cache'), (Join-Path $home_ '.claude\plugins\marketplaces') | Out-Null
+        foreach ($rel in $selection.cacheDirs) {
+            $src = Join-Path $cacheRoot $rel
+            if (-not (Test-Path $src)) { throw "Allowed plugin cache folder not found on the host: $rel" }
+            $target = Join-Path $home_ ".claude\plugins\cache\$rel"
+            New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
+            Copy-Item $src $target -Recurse
+        }
+        foreach ($m in $selection.marketplaces) {
+            $src = Join-Path $claudeDir "plugins\marketplaces\$m"
+            if (-not (Test-Path $src)) { throw "Marketplace folder not found on the host: $m" }
+            Copy-Item $src (Join-Path $home_ ".claude\plugins\marketplaces\$m") -Recurse
+        }
+        $known = Convert-JsonFile (Join-Path $claudeDir 'plugins\known_marketplaces.json')
+        $knownOut = [pscustomobject]@{}
+        foreach ($m in $selection.marketplaces) {
+            $prop = $known.PSObject.Properties[$m]
+            if (-not $prop) { throw "Allowed marketplace missing from known_marketplaces.json: $m" }
+            $knownOut | Add-Member -NotePropertyName $m -NotePropertyValue $prop.Value
+        }
+        Write-TextFile (Convert-HostPath ($selection.registry | ConvertTo-Json -Depth 50)) (Join-Path $home_ '.claude\plugins\installed_plugins.json')
+        Write-TextFile (Convert-HostPath ($knownOut | ConvertTo-Json -Depth 50)) (Join-Path $home_ '.claude\plugins\known_marketplaces.json')
+    }
+} else {
+    Add-Skipped 'host file' '~\.claude\plugins\installed_plugins.json'
 }
-foreach ($m in $selection.marketplaces) {
-    $src = Join-Path $claudeDir "plugins\marketplaces\$m"
-    if (-not (Test-Path $src)) { throw "Marketplace folder not found on the host: $m" }
-    Copy-Item $src (Join-Path $home_ ".claude\plugins\marketplaces\$m") -Recurse
+
+# settings.json: allow-listed keys only. The permission mode stays the one
+# the agent kit sets. Without the host file, only the two unattended-worker
+# flags below are staged, so a worker still starts without a prompt. The
+# enabledPlugins flags keep only the plugins staged above: a flag for a
+# plugin that stayed on the host would warn in every session.
+$settings = [pscustomobject]@{}
+$settingsPath = Join-Path $claudeDir 'settings.json'
+if (Test-Path $settingsPath) {
+    $settings = Convert-ClaudeSettings (Convert-JsonFile $settingsPath)
+} else {
+    Add-Skipped 'host file' '~\.claude\settings.json'
 }
-$known = Convert-JsonFile (Join-Path $claudeDir 'plugins\known_marketplaces.json')
-$knownOut = [pscustomobject]@{}
-foreach ($m in $selection.marketplaces) {
-    $prop = $known.PSObject.Properties[$m]
-    if (-not $prop) { throw "Allowed marketplace missing from known_marketplaces.json: $m" }
-    $knownOut | Add-Member -NotePropertyName $m -NotePropertyValue $prop.Value
+if ($settings.enabledPlugins) {
+    $keep = [pscustomobject]@{}
+    foreach ($p in $settings.enabledPlugins.PSObject.Properties) {
+        if ($stagedPlugins -contains $p.Name) {
+            $keep | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value
+        }
+    }
+    if ($keep.PSObject.Properties.Count -eq 0) {
+        $settings.PSObject.Properties.Remove('enabledPlugins')
+        Add-Skipped 'config key' 'enabledPlugins, no staged plugin has a flag'
+    } else {
+        $settings.enabledPlugins = $keep
+    }
 }
-Write-TextFile (Convert-HostPath ($selection.registry | ConvertTo-Json -Depth 50)) (Join-Path $home_ '.claude\plugins\installed_plugins.json')
-Write-TextFile (Convert-HostPath ($knownOut | ConvertTo-Json -Depth 50)) (Join-Path $home_ '.claude\plugins\known_marketplaces.json')
+# Orca starts Claude with --dangerously-skip-permissions. The two flags
+# suppress the acceptance prompt for bypass mode, so an unattended worker
+# does not stop at startup. See "Agent permissions" in docs/design.md.
+$settings | Add-Member -NotePropertyName skipDangerousModePermissionPrompt -NotePropertyValue $true -Force
+$settings | Add-Member -NotePropertyName bypassPermissionsModeAccepted -NotePropertyValue $true -Force
+Write-JsonFile $settings (Join-Path $assets 'claude-settings.json')
 
 # --- opencode ----------------------------------------------------------------
 # API keys become env references. The generated local kit declares a
-# credential per provider, and the proxy injects the real key.
+# credential per provider, and the proxy injects the real key. Without a
+# host opencode config, no opencode config is staged and the local kit is
+# empty; opencode in the sandbox then runs on the managed config alone.
 
-$opencode = Convert-JsonFile (Join-Path $HOME '.config\opencode\opencode.json')
-$providers = Convert-ProviderApiKeys $opencode
+$providers = @()
+$opencodePath = Join-Path $HOME '.config\opencode\opencode.json'
+if (Test-Path $opencodePath) {
+    $opencode = Convert-JsonFile $opencodePath
+    $providers = Convert-ProviderApiKeys $opencode
 
-# The mcp section is not staged. Its entries point at the host's direct
-# server URLs, and their headers and environment can hold secrets in plain
-# text. The sandbox has no OAuth tokens for them. opencode reaches an MCP
-# server only through a project kit, which adds the sbx MCP gateway entry and
-# the permission rules for it. See the kits\ directory and "Project kits" in
-# docs/design.md.
-if ($opencode.PSObject.Properties['mcp']) {
-    $opencode.PSObject.Properties.Remove('mcp')
+    # The mcp section is not staged. Its entries point at the host's direct
+    # server URLs, and their headers and environment can hold secrets in plain
+    # text. The sandbox has no OAuth tokens for them. opencode reaches an MCP
+    # server only through a project kit, which adds the sbx MCP gateway entry and
+    # the permission rules for it. See the kits\ directory and "Project kits" in
+    # docs/design.md.
+    if ($opencode.PSObject.Properties['mcp']) {
+        $opencode.PSObject.Properties.Remove('mcp')
+    }
+    Write-JsonFile $opencode (Join-Path $home_ '.config\opencode\opencode.json')
+} else {
+    Add-Skipped 'host file' '~\.config\opencode\opencode.json'
 }
-Write-JsonFile $opencode (Join-Path $home_ '.config\opencode\opencode.json')
 
 # --- local credential kit ------------------------------------------------------
 # Personal model credentials are generated from the host config, so the base
@@ -398,6 +456,16 @@ $hits = Find-StagedToken (Join-Path $root 'files')
 if ($hits) {
     $names = @($hits) | ForEach-Object { $_.Substring($root.Length + 1) }
     throw "Token pattern found in staged files:`n$($names -join "`n")"
+}
+
+# --- skipped summary ----------------------------------------------------------
+# Everything the host did not have. Read it: an entry you did not expect
+# usually means a typo in allowlist.txt or a host file you thought existed.
+
+if ($script:skipped.Count -gt 0) {
+    Write-Host ''
+    Write-Host 'Skipped:'
+    foreach ($s in $script:skipped) { Write-Host "  - $s" }
 }
 
 # --- validate ----------------------------------------------------------------

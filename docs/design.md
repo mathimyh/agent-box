@@ -28,13 +28,13 @@ Known trade-off: all worktrees and the main checkout share one file system and o
 |---|---|
 | `sbx-kit/spec.yaml` | Kit spec (schema v2): network allow list, the npm credential, agent instructions, install step. |
 | `sbx-kit/allowlist.txt` | Skills, commands and plugins to stage into the sandbox. Everything else stays on the host. |
-| `sbx-kit/build.ps1` | Stages the host config into `sbx-kit/files/` (not committed) and generates `sbx-kit.local/`. |
+| `sbx-kit/build.ps1` | Stages the host config into `sbx-kit/files/` (not committed) and generates `sbx-kit.local/`. Missing host files and allow-listed items are skipped and listed at the end. |
 | `sbx-kit.local/spec.yaml` | Generated local kit (not committed): one credential and network allow entry per opencode model provider in the host config. |
-| `sbx-kit/assets/install.sh` | Install step. Runs as root at `sbx create`. |
+| `sbx-kit/assets/install.sh` | Install step. Runs as root at `sbx create`: jq, npm 11 and opencode. |
 | `sbx-kit/assets/agent-config.sh` | Merges the staged Claude config into the agent user's home. |
 | `sbx-kit/assets/claude-json.json` | First-run flags for `~/.claude.json`. |
 | `opencode-managed.json` | Approved opencode permissions. See "Agent permissions". |
-| `kits/<project>/` | Project kit: `spec.yaml` plus `files/` (for example the opencode MCP patch). See "Project kits". |
+| `kits/<name>/` | Stack or project kit: `spec.yaml` plus `files/` (the .NET SDK and oc install scripts, the opencode MCP patch). See "Project kits". |
 
 ## Docker Sandboxes kit
 
@@ -48,13 +48,15 @@ Everything in the sandbox is lost: clones, worktrees and the Orca project setup.
 
 What `build.ps1` stages into `files/home/` (about 15 MB):
 
-- The allow-listed skills, commands and plugins, per `allowlist.txt`. For plugins: only the cache versions the registry entries point at, only the marketplaces those plugins need, and both plugin registries filtered to match, with paths changed to `/home/agent`. A listed name missing on the host fails the build. An allow list was chosen over a deny list to keep the worker context small: every staged skill costs its description in every worker session. The staged size drops from about 100 MB to about 15 MB, mostly because the `anthropic-agent-skills` marketplace (no installed plugins) and the `mattpocock-skills` cache (41 MB, mostly bundled `node_modules`) stay out. The `enabledPlugins` flags in the staged settings keep only allowed plugins, and the build fails when none match, so a key-format change cannot silently disable all plugins. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
+- The allow-listed skills, commands and plugins, per `allowlist.txt`. For plugins: only the cache versions the registry entries point at, only the marketplaces those plugins need, and both plugin registries filtered to match, with paths changed to `/home/agent`. A listed name that is missing on the host is skipped with a warning and listed in the build summary: a teammate with a different host config gets a working kit, and the summary is the typo guard. An allow list was chosen over a deny list to keep the worker context small: every staged skill costs its description in every worker session. The staged size drops from about 100 MB to about 15 MB, mostly because the `anthropic-agent-skills` marketplace (no installed plugins) and the `mattpocock-skills` cache (41 MB, mostly bundled `node_modules`) stay out. The `enabledPlugins` flags in the staged settings keep only the plugins that are staged, and the build drops the key with a note when none match, so a flag cannot point at a plugin that stayed on the host. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
 - The shared agent rules. `~/.config/opencode/AGENTS.md` is the source of truth for both host agents, because opencode reads it natively as global rules and Claude Code has no user-level AGENTS.md: the host `~/.claude/CLAUDE.md` is a one-line `@` import of it. `build.ps1` strips the marked host-only blocks (Windows, PowerShell, the host skill store, host Orca dispatch) and stages the rest as both `~/.claude/CLAUDE.md` and `~/.config/opencode/AGENTS.md`. The sandbox note is `agentInstructions.content` in `spec.yaml`; the engine writes it to the kit memory and links it from the generated AI file, so every agent in the sandbox loads it.
 - `~/.config/opencode/opencode.json` with each `apiKey` replaced by `{env:OPENCODE_API_KEY_<PROVIDER>}`. The personal model credentials go into the generated local kit `sbx-kit.local/` (not committed), one per provider with its endpoint domain: the base kit stays free of personal endpoints, so a teammate can use it unchanged. `build.ps1` stops when a provider has no credential with the matching env name and domain. Set the keys with `sbx secret set <provider> -t <key>`. The `mcp` section is dropped: its entries point at the host's direct server URLs, their headers and environment can hold secrets in plain text, and the sandbox has no OAuth tokens for them. opencode gets an MCP server only through a project kit. See "Project kits".
 - No npm token. `spec.yaml` declares the credential `npm-intility`, and the proxy adds `Authorization: Bearer <token>` to each request to `npm.intility.com`. npm in the sandbox has no auth config. `npm login` in the sandbox is not necessary, and it would put the token in a file that every worker can read.
 - `.local/share/agent-box/`: the install scripts, the sanitized Claude settings, the first-run flags, `opencode-managed.json` and the git identity.
 
-The install step installs `libicu`, the .NET SDK 10, `oc` 4.15, npm 11 and `opencode`, writes `/etc/opencode/opencode.json`, and adds the environment to `/etc/sandbox-persistent.sh`. Every shell and SSH session reads that file. Then `agent-config.sh` runs as the agent user and merges the staged config into `~/.claude/settings.json` and `~/.claude.json` with `jq`. The merge keeps the keys that the agent kit and Orca write there (permission mode, hooks, status line).
+The install step installs jq, npm 11 and `opencode`, writes `/etc/opencode/opencode.json`, and adds the environment to `/etc/sandbox-persistent.sh`. Every shell and SSH session reads that file. Then `agent-config.sh` runs as the agent user and merges the staged config into `~/.claude/settings.json` and `~/.claude.json` with `jq`. The merge keeps the keys that the agent kit and Orca write there (permission mode, hooks, status line).
+
+The .NET SDK and `oc` are not in the base kit: a teammate who works on other stacks gets a smaller sandbox. `kits/dotnet` installs the .NET SDK 10 with ICU and its `DOTNET_*` environment, and `kits/intility-id` installs the pinned `oc`. Each kit declares the network entries its installs need.
 
 Facts learned:
 
@@ -62,7 +64,7 @@ Facts learned:
 - Orca writes its hooks and status line into the sandbox `settings.json` at the first SSH session.
 - The sandbox already has Docker (the agent is in the `docker` group), `gh`, `node` 22, `uv` and `jq`. The image is Ubuntu 26.04.
 - The image has Ubuntu's npm 9.2.0. With Node 22, `npm ci` in the Portal fails after about 5 s with `ECONNRESET` ("aborted"). The registry and the proxy are not the cause: curl downloads all 861 archives, also slowly. npm 11 installs the Portal in 17 s. The install step therefore installs npm 11.
-- The kit network policy is added to the global policy per sandbox. The global `balanced` policy allows GitHub, npmjs, nuget.org, dot.net and Ubuntu. The kit adds the install hosts, `api.nuget.org`, `npm.intility.com`, `*.ai.intility.app` and the opencode model catalog. The local kit adds the exact endpoint domain of each opencode model provider.
+- The kit network policy is added to the global policy per sandbox. The global `balanced` policy allows GitHub, npmjs, nuget.org, dot.net and Ubuntu. The base kit adds `npm.intility.com`, `*.ai.intility.app` and the opencode model catalog. `kits/dotnet` adds the .NET install hosts and `api.nuget.org`; `kits/intility-id` adds `mirror.openshift.com` and the cluster API host. The local kit adds the exact endpoint domain of each opencode model provider.
 - The Intility ID MCP server is registered with `sbx mcp add intility-id --url ...` and authorized over OAuth on the host. Load it into a sandbox with `sbx mcp load intility-id --sandbox <name>`, or with `--static-mcp` at create.
 - Auto mode refuses `sbx rm`, `sbx create` and `sbx kit add`. The user runs them from the agent-box folder.
 
@@ -116,11 +118,18 @@ This is the normal path. The `orca-workers` skill describes it. Inside the sandb
 
 ## Project kits
 
-Access that only one project needs goes in a project kit, not in `sbx-kit`. `sbx create` takes `--kit` more than one time. Kit order is load-bearing: pass `.\sbx-kit` first. A project kit that merges into files the base kit writes fails the create loudly when the base kit is missing.
+Access that only one project needs goes in a project kit, not in `sbx-kit`. Stack tools follow the same rule: `kits/dotnet` holds the .NET SDK, so a non-.NET sandbox does not install it. `sbx create` takes `--kit` more than one time. Kit order is load-bearing: pass `.\sbx-kit` first. A project kit that merges into files the base kit writes fails the create loudly when the base kit is missing.
 
-`kits/intility-id` gives `oc` read access to the intility-id dev cluster, and gives opencode the Intility ID MCP tools:
+`kits/dotnet` installs the .NET SDK 10 for sandboxes that work on .NET repos:
 
-- The network policy allows only the cluster API host.
+- The install script adds ICU, the SDK and the `DOTNET_*` environment (its own marked block in `/etc/sandbox-persistent.sh`).
+- The network policy adds the .NET install hosts (`dot.net`, `builds.dotnet.microsoft.com`, `ci.dot.net`) and `api.nuget.org` for package restores.
+- Use it together with the base kit and the local kit: `--kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\dotnet`.
+
+`kits/intility-id` installs the pinned `oc`, gives it read access to the intility-id dev cluster, and gives opencode the Intility ID MCP tools:
+
+- The network policy adds `mirror.openshift.com` (the oc download) and the cluster API host.
+- `oc` is installed by this kit (`install-oc.sh`, pinned and checksum-checked), not by the base kit: a sandbox for a project without a cluster gets no `oc`. The kubeconfig step runs after the install.
 - The ServiceAccount `sandbox-agents/intility-id-sandbox` has the ClusterRole `view`. It can read all namespaces, but not Secrets. ArgoCD manages it from the intility-id repo (intility/intility-id#1151).
 - The `view` role also reads pod logs and ConfigMaps. Pod logs can hold secrets. Workers should read only what the task needs.
 - The proxy adds the ServiceAccount token to requests to the API host. The kubeconfig in the sandbox has no credentials, so the agent never sees the token. A token from `oc login` in the sandbox would go in `~/.kube/config`, where every agent can read it.

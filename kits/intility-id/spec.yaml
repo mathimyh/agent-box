@@ -1,8 +1,8 @@
 # Project mixin for the intility-id sandbox (kit schema v2).
-# Gives `oc` read access to the intility-id cluster, and gives opencode the
-# Intility ID MCP tools. The proxy injects a ServiceAccount token with the
-# `view` role. The agent never sees the token.
-# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\intility-id --static-mcp intility-id
+# Installs `oc` and gives it read access to the intility-id cluster, and
+# gives opencode the Intility ID MCP tools. The proxy injects a
+# ServiceAccount token with the `view` role. The agent never sees the token.
+# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\dotnet --kit .\kits\intility-id --static-mcp intility-id
 # Set the token with: sbx secret set openshift-intility-id --sandbox intility-id
 #
 # Kit order is load-bearing: pass .\sbx-kit before this kit. The opencode
@@ -25,6 +25,9 @@ description: Read access with oc to the intility-id OpenShift cluster, and the I
 permissions:
   network:
     allow:
+      # oc install step
+      - mirror.openshift.com
+      # cluster API
       - api-intility-id-nxa5h0.apps.intilitycloud.com
 
 credentials:
@@ -44,8 +47,13 @@ credentials:
 # token. The sandbox has no OAuth token for the direct URL.
 #
 # A kubeconfig without credentials. oc sends no token, and the proxy adds it.
+# install-oc.sh (under files/) installs the pinned OpenShift client. It runs
+# first: the kubeconfig command below needs the `oc` binary.
 setup:
   install:
+    - command: "sh /home/agent/.local/share/agent-box/intility-id/install-oc.sh"
+      user: "0"
+      description: OpenShift client (oc)
     - command: >-
         oc config set-cluster intility-id --server=https://api-intility-id-nxa5h0.apps.intilitycloud.com:443 &&
         oc config set-credentials proxy &&

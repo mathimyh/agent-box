@@ -1,6 +1,8 @@
 # agent-box mixin for Docker Sandboxes (kit schema v2).
-# Adds the host's skills, plugins, Claude settings and git identity, plus the
-# .NET SDK, oc and opencode, to the built-in `claude` or `opencode` agent.
+# Adds the host's skills, plugins, Claude settings, git identity and opencode
+# to the built-in `claude` or `opencode` agent. The .NET SDK and oc are not
+# in the base kit: they live in kits under kits/ (kits/dotnet,
+# kits/intility-id).
 # Run build.ps1 first. It fills files/ from the host config and generates
 # sbx-kit.local/ with the personal model credentials.
 # Use: sbx create claude --kit ./sbx-kit --kit ./sbx-kit.local
@@ -9,7 +11,7 @@ kind: mixin
 name: agent-box
 version: "0.1.0"
 displayName: agent-box tools and config
-description: Host skills, plugins, Claude settings, .NET SDK, oc and opencode for Orca workers.
+description: Host skills, plugins, Claude settings, git identity and opencode for Orca workers.
 
 # The engine writes this to the kit memory next to the generated AI file and
 # links it, so every agent in the sandbox loads it.
@@ -25,19 +27,13 @@ agentInstructions:
     - `gh` is already authenticated through the sandbox proxy. Do not run `gh auth` commands. They need a permission the sandbox does not give.
     - Do not run `git worktree prune`. It touches every worktree of the repo, also the ones Orca and other workers use at the same time. A registration that looks stale can be a worktree in use, and Orca then loses it.
     - Orca commands: the `orca` CLI sees only this sandbox. Use `--worktree path:/home/agent/orca/workspaces/<repo>/<worktree>`. Host paths do not resolve.
-    - Build tools: `dotnet` (SDK 10), `oc`, `node`, `npm`, `docker`, `opencode`.
-    - Docker works, so Testcontainers integration tests run here. Builds write to the normal `bin/` and `obj/` folders.
+    - Build tools: `node`, `npm`, `docker`, `opencode`. A .NET repo adds `dotnet` and a cluster project adds `oc` with their project kits.
+    - Docker works, so Testcontainers integration tests run here.
 
 permissions:
   network:
     allow:
-      # install step
-      - dot.net
-      - builds.dotnet.microsoft.com
-      - ci.dot.net
-      - mirror.openshift.com
-      # builds and package restores
-      - api.nuget.org
+      # npm registry for team packages
       - npm.intility.com
       # opencode model endpoints
       - "*.ai.intility.app"
@@ -66,4 +62,4 @@ setup:
   install:
     - command: "sh /home/agent/.local/share/agent-box/install.sh"
       user: "0"
-      description: .NET SDK, oc, opencode, Claude and git config
+      description: opencode, npm, Claude and git config

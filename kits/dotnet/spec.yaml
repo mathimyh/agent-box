@@ -1,0 +1,33 @@
+# Stack kit for .NET repos (kit schema v2). Installs the .NET SDK 10 with
+# the environment it needs, on top of the base agent-box kit.
+# Use: sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\dotnet
+schemaVersion: "2"
+kind: mixin
+name: dotnet
+version: "0.1.0"
+displayName: .NET SDK 10
+description: The .NET SDK 10, for sandboxes that work on .NET repos.
+
+# The engine writes this to the kit memory next to the generated AI file and
+# links it, so every agent in the sandbox loads it.
+agentInstructions:
+  content: |
+    # .NET (dotnet kit)
+
+    - Build tools: `dotnet` (SDK 10). Builds write to the normal `bin/` and `obj/` folders.
+
+permissions:
+  network:
+    allow:
+      # install step
+      - dot.net
+      - builds.dotnet.microsoft.com
+      - ci.dot.net
+      # package restores
+      - api.nuget.org
+
+setup:
+  install:
+    - command: "sh /home/agent/.local/share/agent-box/dotnet/install-dotnet.sh"
+      user: "0"
+      description: .NET SDK 10
