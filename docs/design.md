@@ -34,14 +34,14 @@ Known trade-off: all worktrees and the main checkout share one file system and o
 | `sbx-kit/assets/agent-config.sh` | Merges the staged Claude config into the agent user's home. |
 | `sbx-kit/assets/claude-json.json` | First-run flags for `~/.claude.json`. |
 | `opencode-managed.json` | Approved opencode permissions. See "Agent permissions". |
-| `kits/<project>/spec.yaml` | Project kit. See "Project kits". |
+| `kits/<project>/` | Project kit: `spec.yaml` plus `files/` (for example the opencode MCP patch). See "Project kits". |
 
 ## Docker Sandboxes kit
 
 Kit schema v2 was chosen, not v3. v3 mixins do not combine with the built-in agent names. v2 also has `files/home/` and an install step. `sbx kit add` does not accept a kit with `files/`. A kit change therefore needs a new sandbox:
 
 ```powershell
-sbx rm <name>; sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local --static-mcp intility-id
+sbx rm <name>; sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local
 ```
 
 Everything in the sandbox is lost: clones, worktrees and the Orca project setup. Clone the repo again after the create.
@@ -50,7 +50,7 @@ What `build.ps1` stages into `files/home/` (about 15 MB):
 
 - The allow-listed skills, commands and plugins, per `allowlist.txt`. For plugins: only the cache versions the registry entries point at, only the marketplaces those plugins need, and both plugin registries filtered to match, with paths changed to `/home/agent`. A listed name missing on the host fails the build. An allow list was chosen over a deny list to keep the worker context small: every staged skill costs its description in every worker session. The staged size drops from about 100 MB to about 15 MB, mostly because the `anthropic-agent-skills` marketplace (no installed plugins) and the `mattpocock-skills` cache (41 MB, mostly bundled `node_modules`) stay out. The `enabledPlugins` flags in the staged settings keep only allowed plugins, and the build fails when none match, so a key-format change cannot silently disable all plugins. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
 - The shared agent rules. `~/.config/opencode/AGENTS.md` is the source of truth for both host agents, because opencode reads it natively as global rules and Claude Code has no user-level AGENTS.md: the host `~/.claude/CLAUDE.md` is a one-line `@` import of it. `build.ps1` strips the marked host-only blocks (Windows, PowerShell, the host skill store, host Orca dispatch) and stages the rest as both `~/.claude/CLAUDE.md` and `~/.config/opencode/AGENTS.md`. The sandbox note is `agentInstructions.content` in `spec.yaml`; the engine writes it to the kit memory and links it from the generated AI file, so every agent in the sandbox loads it.
-- `~/.config/opencode/opencode.json` with each `apiKey` replaced by `{env:OPENCODE_API_KEY_<PROVIDER>}`. The personal model credentials go into the generated local kit `sbx-kit.local/` (not committed), one per provider with its endpoint domain: the base kit stays free of personal endpoints, so a teammate can use it unchanged. `build.ps1` stops when a provider has no credential with the matching env name and domain. Set the keys with `sbx secret set <provider> -t <key>`. The `intility-id` MCP entry points at the sbx MCP gateway (`http://mcp-gateway.docker.internal/mcp`), the same server that Claude uses. The sandbox has no OAuth token for the direct URL, and the proxy adds the token for the gateway.
+- `~/.config/opencode/opencode.json` with each `apiKey` replaced by `{env:OPENCODE_API_KEY_<PROVIDER>}`. The personal model credentials go into the generated local kit `sbx-kit.local/` (not committed), one per provider with its endpoint domain: the base kit stays free of personal endpoints, so a teammate can use it unchanged. `build.ps1` stops when a provider has no credential with the matching env name and domain. Set the keys with `sbx secret set <provider> -t <key>`. The `mcp` section is dropped: its entries point at the host's direct server URLs, their headers and environment can hold secrets in plain text, and the sandbox has no OAuth tokens for them. opencode gets an MCP server only through a project kit. See "Project kits".
 - No npm token. `spec.yaml` declares the credential `npm-intility`, and the proxy adds `Authorization: Bearer <token>` to each request to `npm.intility.com`. npm in the sandbox has no auth config. `npm login` in the sandbox is not necessary, and it would put the token in a file that every worker can read.
 - `.local/share/agent-box/`: the install scripts, the sanitized Claude settings, the first-run flags, `opencode-managed.json` and the git identity.
 
@@ -87,7 +87,7 @@ opencode has no bypass flag. Its approved permissions are in `opencode-managed.j
 - The install step copies the file to `/etc/opencode/opencode.json`. This is opencode's managed config on Linux. It has a higher priority than the user config and the project config.
 - The sandbox sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`. The last matching permission rule wins, and a merged key keeps the position of the layer that added it first. Without the flag, an `opencode.json` in the repo could put a key such as `*.env` before `*` and so cancel the deny. The flag is in the opencode binary but not documented. Verified with opencode 1.19.3 and `opencode debug config`.
 - The read denies stop accidental reads. They are not a security boundary, because `bash` is `allow`. The boundary is the sandbox.
-- `"*": "allow"` also allows all MCP tools. The Intility ID tools (`intility-id_*`) are `ask`, and only the read tools (`get`, `list`, `check`, `batch_check`, `describe`, `preview_delete`) are allowed. A new write tool on the server therefore asks before it runs. The write tools act with the user's identity in dev.
+- `"*": "allow"` also allows all MCP tools. The base kit stages no MCP server, so opencode starts with none. An opencode permission pattern matches tool names only, so ask-by-default for a server can only come from rules that name it. A project kit therefore adds the MCP entry and its rules together. In `kits/intility-id`, the Intility ID tools (`intility-id_*`) are `ask`, and only the read tools (`get`, `list`, `check`, `batch_check`, `describe`, `preview_delete`) are allowed. A new write tool on the server therefore asks before it runs. The write tools act with the user's identity in dev.
 
 ## Orca
 
@@ -116,14 +116,18 @@ This is the normal path. The `orca-workers` skill describes it. Inside the sandb
 
 ## Project kits
 
-Access that only one project needs goes in a project kit, not in `sbx-kit`. `sbx create` takes `--kit` more than one time.
+Access that only one project needs goes in a project kit, not in `sbx-kit`. `sbx create` takes `--kit` more than one time. Kit order is load-bearing: pass `.\sbx-kit` first. A project kit that merges into files the base kit writes fails the create loudly when the base kit is missing.
 
-`kits/intility-id` gives `oc` read access to the intility-id dev cluster:
+`kits/intility-id` gives `oc` read access to the intility-id dev cluster, and gives opencode the Intility ID MCP tools:
 
 - The network policy allows only the cluster API host.
 - The ServiceAccount `sandbox-agents/intility-id-sandbox` has the ClusterRole `view`. It can read all namespaces, but not Secrets. ArgoCD manages it from the intility-id repo (intility/intility-id#1151).
+- The `view` role also reads pod logs and ConfigMaps. Pod logs can hold secrets. Workers should read only what the task needs.
 - The proxy adds the ServiceAccount token to requests to the API host. The kubeconfig in the sandbox has no credentials, so the agent never sees the token. A token from `oc login` in the sandbox would go in `~/.kube/config`, where every agent can read it.
-- The token comes from `oc create token` and expires after 90 days.
+- The token comes from `oc create token` and expires after 90 days. Nothing rotates it and nothing sends a reminder. Set a reminder, or create and set a new token before it expires.
+- A v2 kit cannot declare MCP servers, so `--static-mcp intility-id` stays on the create command. That serves Claude. opencode gets the server from this kit: its install step merges `files/home/agent/.local/share/agent-box/intility-id/opencode-patch.json` into both opencode configs with `jq`. The permission rules go into `/etc/opencode/opencode.json`, the gateway entry into `~/.config/opencode/opencode.json`.
+- The gateway entry points at `http://mcp-gateway.docker.internal/mcp`, the same server that Claude uses. The sandbox has no OAuth token for the direct URL, and the proxy adds the token for the gateway. The rules ask first and allow only the read tools, so a new write tool on the server asks before it runs.
+- Stacked kits apply each stage in `--kit` order: the kit's static `files/` land before any install command runs, and its install commands run after the base kit's. The merges therefore see both files in their final place.
 
 ## Orca per-workspace environments (considered, not used)
 

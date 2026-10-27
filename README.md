@@ -39,7 +39,7 @@ Run the commands in PowerShell from the agent-box folder.
 4. Create the sandbox. Use one sandbox per repo.
 
    ```powershell
-   sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local --static-mcp intility-id
+   sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local
    ```
 
    Then set a fine-grained GitHub token for the repos of this sandbox. The command asks for the value. See "GitHub token per sandbox" in `docs/design.md` for the token settings. There is no global `github` secret. The sandbox has no GitHub access until you set this token, so a missing token fails closed instead of using the host token.
@@ -58,13 +58,13 @@ Run the commands in PowerShell from the agent-box folder.
 
 ## Project kits
 
-A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`. Add it with another `--kit` at create:
+A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`, or its MCP servers. Add it with another `--kit` at create:
 
 ```powershell
 sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\intility-id --static-mcp intility-id
 ```
 
-`sbx kit add` does not accept a kit that declares credentials. To add a project kit to a sandbox that exists, remove the sandbox and create it again. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
+`sbx kit add` does not accept a kit that declares credentials or static files. To add a project kit to a sandbox that exists, remove the sandbox and create it again. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
 
 ## Start workers
 
