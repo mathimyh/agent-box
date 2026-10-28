@@ -84,6 +84,7 @@ Enterprise policy blocks `--dangerously-skip-permissions` for Claude, so Claude 
 - The install step copies the file to `/etc/opencode/opencode.json`. This is opencode's managed config on Linux. It has a higher priority than the user config and the project config.
 - The sandbox sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`. The last matching permission rule wins, and a merged key keeps the position of the layer that added it first. Without the flag, an `opencode.json` in the repo could put a key such as `*.env` before `*` and so cancel the deny. The flag is in the opencode binary but not documented. Verified with opencode 1.19.3 and `opencode debug config`.
 - The read denies stop accidental reads. They are not a security boundary, because `bash` is `allow`. The boundary is the sandbox.
+- `external_directory` is `"*": "allow"`. Orca workers run unattended and cannot answer an ask prompt. In a fan-out, the main clone and the sibling worktrees are outside the worker worktree, so an ask rule blocks the worker.
 - `"*": "allow"` also allows all MCP tools. The Intility ID tools (`intility-id_*`) are `ask`, and only the read tools (`get`, `list`, `check`, `batch_check`, `describe`, `preview_delete`) are allowed. A new write tool on the server therefore asks before it runs. The write tools act with the user's identity in dev.
 
 ## Orca

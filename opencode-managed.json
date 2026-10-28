@@ -34,8 +34,7 @@
     "intility-id_id_describe_*": "allow",
     "intility-id_id_preview_delete": "allow",
     "external_directory": {
-      "*": "ask",
-      "/home/agent/scratch/**": "allow"
+      "*": "allow"
     },
     "doom_loop": "ask"
   }
