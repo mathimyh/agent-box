@@ -27,8 +27,7 @@
     "websearch": "allow",
     "task": "allow",
     "external_directory": {
-      "*": "ask",
-      "/home/agent/scratch/**": "allow"
+      "*": "allow"
     },
     "doom_loop": "ask"
   }
