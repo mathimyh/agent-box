@@ -22,6 +22,19 @@ The kit in `sbx-kit/` adds the user's config and tools to the built-in `claude` 
 
 Known trade-off: all worktrees and the main checkout share one file system and one user. Only the brief stops a worker from changing main or a sibling worktree.
 
+## What this sandbox does not protect against
+
+The sandbox isolates the host from the agent. It does not isolate secrets from code that runs inside it. Everything inside the sandbox is mutually trusted: the agents, the code they build and run, and the nested dockerd (the agent user is in the `docker` group).
+
+Code that the workers build and run (`dotnet test`, Testcontainers, npm postinstall scripts) runs with:
+
+- passwordless sudo, the full capability set, seccomp off and `NoNewPrivs=0`;
+- control of the nested dockerd;
+- every sandbox token readable from the environment and from disk;
+- an exfiltration channel to the allowlisted services (github.com, api.github.com, pypi.org, registry.npmjs.org).
+
+Only the host is protected. Workers therefore run only code the user trusts: the repo of the project, its dependencies and the kits.
+
 ## Files
 
 | File | Purpose |
@@ -45,8 +58,6 @@ sbx rm <name>; .\sbx-kit\new-sandbox.ps1 -Name <name> -Repo <owner/repo> [-Kit <
 ```
 
 Everything in the sandbox is lost: clones, worktrees and the Orca project setup. `new-sandbox.ps1` rebuilds the kit, checks that every kit credential has a stored secret and stops before the create when one is missing, creates the sandbox, asks for the scoped GitHub token and the tokens a project kit declares, and clones the repo. The Orca steps cannot run from the CLI (the SSH target is added in the app); the script prints them with the values filled in. The script is safe to run again after a partial failure: an existing sandbox, set secrets and a cloned repo are detected and skipped.
-
-Config-only changes do not need the recreate: `.\sbx-kit\sync.ps1 -Name <name>` runs `build.ps1`, copies `files/home/` into the sandbox with `sbx cp`, refreshes `/etc/opencode/opencode.json`, re-applies the project-kit opencode patches (`assets/opencode-repatch.sh`: the same jq merges as the kit install steps) and runs `agent-config.sh` again as the agent user. Clones, worktrees and the Orca setup stay. Running agents keep their loaded config; the next session gets the new files. `sbx cp` merges directories and does not mirror them: a file removed from the kit stays in the sandbox.
 
 Config-only changes do not need the recreate: `.\sbx-kit\sync.ps1 -Name <name>` runs `build.ps1`, copies `files/home/` into the sandbox with `sbx cp`, refreshes `/etc/opencode/opencode.json`, re-applies the project-kit opencode patches (`assets/opencode-repatch.sh`: the same jq merges as the kit install steps) and runs `agent-config.sh` again as the agent user. Clones, worktrees and the Orca setup stay. Running agents keep their loaded config; the next session gets the new files. `sbx cp` merges directories and does not mirror them: a file removed from the kit stays in the sandbox.
 
@@ -91,7 +102,7 @@ opencode has no bypass flag. Its approved permissions are in `opencode-managed.j
 
 - The install step copies the file to `/etc/opencode/opencode.json`. This is opencode's managed config on Linux. It has a higher priority than the user config and the project config.
 - The sandbox sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`. The last matching permission rule wins, and a merged key keeps the position of the layer that added it first. Without the flag, an `opencode.json` in the repo could put a key such as `*.env` before `*` and so cancel the deny. The flag is in the opencode binary but not documented. Verified with opencode 1.19.3 and `opencode debug config`.
-- The read denies stop accidental reads. They are not a security boundary, because `bash` is `allow`. The boundary is the sandbox.
+- The read denies (`.env`, `*.pem`, `*.key`, `id_rsa*`, `.aws/credentials`, `.npmrc`, `.git-credentials`) are advisory. They stop accidental reads, and nothing more. The bash tool is `allow`, so the same files are one `cat` away. The rules apply only at the opencode tool layer: they are policy, not isolation. The control is that secrets do not reach sandbox disk in the first place. The proxy injects them, and the agent sees a placeholder. See "What this sandbox does not protect against" for the trust model.
 - `external_directory` is `"*": "allow"`. Orca workers run unattended and cannot answer an ask prompt. In a fan-out, the main clone and the sibling worktrees are outside the worker worktree, so an ask rule blocks the worker.
 - `"*": "allow"` also allows all MCP tools. The base kit stages no MCP server, so opencode starts with none. An opencode permission pattern matches tool names only, so ask-by-default for a server can only come from rules that name it. A project kit therefore adds the MCP entry and its rules together. In `kits/intility-id`, the Intility ID tools (`intility-id_*`) are `ask`, and only the read tools (`get`, `list`, `check`, `batch_check`, `describe`, `preview_delete`) are allowed. A new write tool on the server therefore asks before it runs. The write tools act with the user's identity in dev.
 
