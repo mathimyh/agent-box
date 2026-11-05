@@ -1,6 +1,6 @@
 # agent-box
 
-agent-box runs Orca workers (Claude Code and opencode) in a Docker Sandbox, not on the Windows host. The workers get your skills, plugins, MCP servers and GitHub access. The sandbox keeps them away from host files and host secrets.
+agent-box runs Orca workers (Claude Code and opencode) in a Docker Sandbox, not on the Windows host. The workers get your skills, plugins, MCP servers and GitHub access. The sandbox keeps them away from host files and host secrets. It does not protect secrets from the code the workers run inside it: see "What this sandbox does not protect against" in `docs/design.md`.
 
 Orca connects to the sandbox over SSH as the "Run on" target "Docker Agents". Repositories and worktrees live inside the sandbox.
 
