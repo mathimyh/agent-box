@@ -268,7 +268,7 @@ $allow = Get-SbxAllowlist (Join-Path $root 'allowlist.txt')
 
 # --- assets used by install.sh ---------------------------------------------
 
-foreach ($f in 'install.sh', 'agent-config.sh', 'claude-json.json') {
+foreach ($f in 'install.sh', 'agent-config.sh', 'claude-json.json', 'opencode-repatch.sh') {
     # -Encoding UTF8: under PS 5.1 the default reads as ANSI and non-ASCII
     # text becomes mojibake in the sandbox.
     Write-TextFile (Get-Content (Join-Path $root "assets\$f") -Raw -Encoding UTF8) (Join-Path $assets $f)
