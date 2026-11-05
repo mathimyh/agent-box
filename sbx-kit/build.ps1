@@ -19,7 +19,7 @@ name and domain.
 Then scans files/ for token patterns and stops the build on a match. The
 error names the file only, never the value.
 Run it again after you change plugins, skills or settings on the host.
-Then: sbx create claude --kit .\sbx-kit --kit .\sbx-kit.local
+Then: .\sbx-kit\new-sandbox.ps1 -Name <name> -Repo <owner/repo>
 #>
 [CmdletBinding()]
 param()
