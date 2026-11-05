@@ -27,3 +27,4 @@ update-docs.md
 [plugins]
 code-review@claude-plugins-official
 csharp-lsp@claude-plugins-official
+ponytail@ponytail
