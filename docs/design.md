@@ -46,6 +46,8 @@ sbx rm <name>; sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.l
 
 Everything in the sandbox is lost: clones, worktrees and the Orca project setup. Clone the repo again after the create.
 
+Config-only changes do not need the recreate: `.\sbx-kit\sync.ps1 -Name <name>` runs `build.ps1`, copies `files/home/` into the sandbox with `sbx cp`, refreshes `/etc/opencode/opencode.json`, re-applies the project-kit opencode patches (`assets/opencode-repatch.sh`: the same jq merges as the kit install steps) and runs `agent-config.sh` again as the agent user. Clones, worktrees and the Orca setup stay. Running agents keep their loaded config; the next session gets the new files. `sbx cp` merges directories and does not mirror them: a file removed from the kit stays in the sandbox.
+
 What `build.ps1` stages into `files/home/` (about 15 MB):
 
 - The allow-listed skills, commands and plugins, per `allowlist.txt`. For plugins: only the cache versions the registry entries point at, only the marketplaces those plugins need, and both plugin registries filtered to match, with paths changed to `/home/agent`. A listed name missing on the host fails the build. An allow list was chosen over a deny list to keep the worker context small: every staged skill costs its description in every worker session. The staged size drops from about 100 MB to about 15 MB, mostly because the `anthropic-agent-skills` marketplace (no installed plugins) and the `mattpocock-skills` cache (41 MB, mostly bundled `node_modules`) stay out. The `enabledPlugins` flags in the staged settings keep only allowed plugins, and the build fails when none match, so a key-format change cannot silently disable all plugins. The shared `sbx skills` store is not used. `sbx skills import` would also import `synced` and the opencode copies of the plugin skills, which the plugins already give.
@@ -65,6 +67,7 @@ Facts learned:
 - The kit network policy is added to the global policy per sandbox. The global `balanced` policy allows GitHub, npmjs, nuget.org, dot.net and Ubuntu. The kit adds the install hosts, `api.nuget.org`, `npm.intility.com`, `*.ai.intility.app` and the opencode model catalog. The local kit adds the exact endpoint domain of each opencode model provider.
 - The Intility ID MCP server is registered with `sbx mcp add intility-id --url ...` and authorized over OAuth on the host. Load it into a sandbox with `sbx mcp load intility-id --sandbox <name>`, or with `--static-mcp` at create.
 - Auto mode refuses `sbx rm`, `sbx create` and `sbx kit add`. The user runs them from the agent-box folder.
+- `sbx cp` does not create parent directories in the sandbox, so it can only replace paths that exist. `sync.ps1` copies only the top-level folders of `files/home/`, which the create step always makes.
 
 ## GitHub token per sandbox
 

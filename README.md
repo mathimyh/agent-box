@@ -54,7 +54,13 @@ Run the commands in PowerShell from the agent-box folder.
 
 ## Change the kit
 
-`sbx kit add` does not accept this kit. To apply a kit change, remove the sandbox and create it again (step 2 to 6). Everything in the sandbox is lost, also clones and worktrees.
+Config changes (skills, plugins, settings, agent rules) reach a running sandbox without a recreate. The clones, worktrees and the Orca project setup stay. Running agents keep their loaded config; the next agent session gets the new files.
+
+```powershell
+.\sbx-kit\sync.ps1 -Name <name>
+```
+
+The copy merges directories: a file removed from the kit stays in the sandbox. Changes to `spec.yaml`, `install.sh` or the network policy still need a full recreate. `sbx kit add` does not accept this kit either. To apply those, remove the sandbox and create it again (step 2 to 6). Everything in the sandbox is lost, also clones and worktrees.
 
 ## Project kits
 
