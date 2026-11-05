@@ -27,6 +27,7 @@ agentInstructions:
     - Orca commands: the `orca` CLI sees only this sandbox. Use `--worktree path:/home/agent/orca/workspaces/<repo>/<worktree>`. Host paths do not resolve.
     - Build tools: `dotnet` (SDK 10), `oc`, `node`, `npm`, `docker`, `opencode`.
     - Docker works, so Testcontainers integration tests run here. Builds write to the normal `bin/` and `obj/` folders.
+    - If you start a dev server, the user cannot reach it from a browser yet. Tell the user to publish the port from the host, for example `sbx ports <name> --publish 3000:3000`, and to open `http://localhost:3000`.
 
 permissions:
   network:
