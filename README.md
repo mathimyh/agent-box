@@ -21,7 +21,7 @@ Run the commands in PowerShell from the agent-box folder.
    sbx policy init balanced
    ```
 
-2. Stage your host config into the kit. Run this again after you change skills, plugins or settings on the host. The build also generates `sbx-kit.local\`, a kit with one credential per opencode model provider in your host config. It is not committed.
+2. Stage your host config into the kit. `new-sandbox.ps1` and `sync.ps1` run this build themselves; run it alone only to check the staging. The build also generates `sbx-kit.local\`, a kit with one credential per opencode model provider in your host config. It is not committed.
 
    ```powershell
    .\sbx-kit\build.ps1
@@ -36,21 +36,19 @@ Run the commands in PowerShell from the agent-box folder.
 
    One `sbx secret set` per opencode provider in your host `~/.config/opencode/opencode.json` that has an API key. The service names are listed in `sbx-kit.local\spec.yaml`. Each command asks for the value. For `npm-intility`, run `npm login --registry https://npm.intility.com --auth-type=legacy` on the host first, with your `aaXXX` account. Then use the `_authToken` value from your `~/.npmrc`.
 
-4. Create the sandbox. Use one sandbox per repo.
+4. Create the sandbox. Use one sandbox per repo. One command builds the kit, checks that every kit credential has a stored secret (it stops before the create when one is missing), creates the sandbox, asks for the scoped GitHub token and clones the repo to `/home/agent/repos/<repo>`:
 
    ```powershell
-   sbx create claude --name <name> --kit .\sbx-kit --kit .\sbx-kit.local
+   .\sbx-kit\new-sandbox.ps1 -Name <name> -Repo <owner/repo>
    ```
 
-   Then set a fine-grained GitHub token for the repos of this sandbox. The command asks for the value. See "GitHub token per sandbox" in `docs/design.md` for the token settings. There is no global `github` secret. The sandbox has no GitHub access until you set this token, so a missing token fails closed instead of using the host token.
+   There is no global `github` secret. The sandbox has no GitHub access until the token is set, so a missing token fails closed instead of using the host token. See "GitHub token per sandbox" in `docs/design.md` for the token settings.
+
+5. Finish the Orca setup. Add an SSH target with host `<name>.sbx` and user `_default_user_`. Orca installs its daemon on the first connection, about a minute. Then take the environment id from `orca host list` and register the clone as a project. The script prints these commands with the values filled in. See "Orca" in `docs/design.md`.
 
    ```powershell
-   sbx secret set github --sandbox <name>
+   orca project setup-existing-folder --project github:<owner/repo> --host runtime:<environment-id> --path /home/agent/repos/<repo> --kind git
    ```
-
-5. Clone the repo in the sandbox to `/home/agent/repos/<repo>`.
-
-6. In Orca, add an SSH target "Docker Agents" with host `<name>.sbx` and user `_default_user_`. Then register the clone as a project on that host. See "Orca" in `docs/design.md`.
 
 ## Change the kit
 
@@ -60,17 +58,17 @@ Config changes (skills, plugins, settings, agent rules) reach a running sandbox 
 .\sbx-kit\sync.ps1 -Name <name>
 ```
 
-The copy merges directories: a file removed from the kit stays in the sandbox. Changes to `spec.yaml`, `install.sh` or the network policy still need a full recreate. `sbx kit add` does not accept this kit either. To apply those, remove the sandbox and create it again (step 2 to 6). Everything in the sandbox is lost, also clones and worktrees.
+The copy merges directories: a file removed from the kit stays in the sandbox. Changes to `spec.yaml`, `install.sh` or the network policy still need a full recreate. `sbx kit add` does not accept this kit either. To apply those, remove the sandbox and run step 4 again. Everything in the sandbox is lost, also clones and worktrees.
 
 ## Project kits
 
-A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`, or its MCP servers. Add it with another `--kit` at create:
+A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`, or its MCP servers. Add it with `-Kit`, and `-StaticMcp` for its MCP servers. The command asks for the token the kit declares:
 
 ```powershell
-sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\intility-id --static-mcp intility-id
+.\sbx-kit\new-sandbox.ps1 -Name intility-id -Repo intility/intility-id -Kit intility-id -StaticMcp intility-id
 ```
 
-`sbx kit add` does not accept a kit that declares credentials or static files. To add a project kit to a sandbox that exists, remove the sandbox and create it again. Then set the token that the kit declares. The comments in its `spec.yaml` tell how.
+`sbx kit add` does not accept a kit that declares credentials or static files. To add a project kit to a sandbox that exists, remove the sandbox and create it again with the same command.
 
 ## Start workers
 

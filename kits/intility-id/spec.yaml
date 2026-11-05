@@ -2,7 +2,7 @@
 # Gives `oc` read access to the intility-id cluster, and gives opencode the
 # Intility ID MCP tools. The proxy injects a ServiceAccount token with the
 # `view` role. The agent never sees the token.
-# Use: sbx create claude --name intility-id --kit .\sbx-kit --kit .\sbx-kit.local --kit .\kits\intility-id --static-mcp intility-id
+# Use: .\sbx-kit\new-sandbox.ps1 -Name intility-id -Repo intility/intility-id -Kit intility-id -StaticMcp intility-id
 # Set the token with: sbx secret set openshift-intility-id --sandbox intility-id
 #
 # Kit order is load-bearing: pass .\sbx-kit before this kit. The opencode
