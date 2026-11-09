@@ -45,6 +45,8 @@ permissions:
       # opencode fetches its model catalog at start and hangs without it
       - opencode.ai
       - models.opencode.ai
+      # opencode downloads the ponytail plugin from npmjs on first start
+      - registry.npmjs.org
 
 # Shared credentials. The proxy injects the real key for the domain. The
 # agent only sees a placeholder. Set with: sbx secret set <service> -t <key>
