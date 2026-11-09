@@ -73,3 +73,18 @@ A project kit in `kits/<project>/` adds the access that only one project needs, 
 ## Start workers
 
 Use the `orca-workers` skill from an agent that runs inside the sandbox. It creates the worktrees, starts the workers and collects their results.
+
+## See a dev server in your own browser
+
+A dev server that runs in the sandbox (for example `npm run dev`) is not reachable from your browser until you publish its port to the host. You do not need the Orca embedded browser.
+
+Run this in PowerShell on the host:
+
+```powershell
+sbx ports <name> --publish 3000:3000
+sbx ports <name>
+```
+
+The first command publishes sandbox port 3000 on host port 3000. To let `sbx` pick a free host port, publish the sandbox port alone: `--publish 3000`. The second command lists the published ports with their host ports. Open `http://localhost:<host-port>` in your browser.
+
+The binding is on host loopback only, so nothing outside the host can reach it.

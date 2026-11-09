@@ -81,6 +81,7 @@ Facts learned:
 - The Intility ID MCP server is registered with `sbx mcp add intility-id --url ...` and authorized over OAuth on the host. Load it into a sandbox with `sbx mcp load intility-id --sandbox <name>`, or with `--static-mcp` at create.
 - Auto mode refuses `sbx rm`, `sbx create` and `sbx kit add`. The user runs them from the agent-box folder.
 - `sbx cp` does not create parent directories in the sandbox, so it can only replace paths that exist. `sync.ps1` copies only the top-level folders of `files/home/`, which the create step always makes.
+- `sbx ports <name> --publish [<host-port>:]<sandbox-port>` binds a sandbox port on host loopback, tcp4 by default. Without a host port, `sbx` allocates an ephemeral one. `sbx ports <name>` lists the mappings. This is how to see a sandbox dev server in your own browser, without the Orca embedded browser. See "See a dev server in your own browser" in `README.md`.
 
 ## GitHub token per sandbox
 
