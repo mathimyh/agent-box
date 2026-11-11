@@ -94,11 +94,12 @@ function Convert-ClaudeSettings {
 }
 
 # Files that hold a token pattern: GitHub PATs (classic and fine-grained),
-# sk- API keys, a long Bearer value, an npmrc _authToken line. Short strings
-# such as "Bearer proxy-managed" stay under the length bounds.
+# sk- API keys, a long Bearer value, an npmrc _authToken line, an Intility
+# blu_ model key. Short strings such as "Bearer proxy-managed" stay under
+# the length bounds.
 function Find-StagedToken {
     param([string]$Directory)
-    $pattern = 'ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:ant-[A-Za-z0-9-]{20,}|proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{20,})|Bearer\s+[A-Za-z0-9._~+/=-]{20,}|_authToken'
+    $pattern = 'ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:ant-[A-Za-z0-9-]{20,}|proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{20,})|Bearer\s+[A-Za-z0-9._~+/=-]{20,}|blu_[A-Za-z0-9]{20,}|_authToken'
     Get-ChildItem -LiteralPath $Directory -Recurse -File | Where-Object {
         [regex]::IsMatch([System.IO.File]::ReadAllText($_.FullName), $pattern)
     } | ForEach-Object { $_.FullName }
@@ -173,19 +174,26 @@ function Select-AllowedPlugins {
 function Convert-ProviderApiKeys {
     param($Opencode)
     $providers = @()
-    foreach ($p in $Opencode.provider.PSObject.Properties) {
-        if ($p.Value.options -and $p.Value.options.PSObject.Properties['headers']) {
-            $p.Value.options.PSObject.Properties.Remove('headers')
+    # opencode v2 names the map "providers" and puts keys under "settings";
+    # v1 named it "provider" with keys under "options". Read both shapes.
+    $map = $Opencode.providers
+    if (-not $map) { $map = $Opencode.provider }
+    if (-not $map) { return $providers }
+    foreach ($p in $map.PSObject.Properties) {
+        $opts = $p.Value.settings
+        if (-not $opts) { $opts = $p.Value.options }
+        if ($opts -and $opts.PSObject.Properties['headers']) {
+            $opts.PSObject.Properties.Remove('headers')
         }
-        if ($p.Value.options -and $p.Value.options.PSObject.Properties['apiKey']) {
+        if ($opts -and $opts.PSObject.Properties['apiKey']) {
             $var = 'OPENCODE_API_KEY_' + ($p.Name.ToUpperInvariant() -replace '[^A-Z0-9]', '_')
-            $base = $p.Value.options.baseURL
+            $base = $opts.baseURL
             $domain = $null
             if ($base) { try { $domain = ([uri]$base).Host } catch { } }
             if (-not $domain) {
                 throw "opencode provider '$($p.Name)' has an apiKey but no baseURL. Its sandbox credential cannot be built."
             }
-            $p.Value.options.apiKey = "{env:$var}"
+            $opts.apiKey = "{env:$var}"
             $providers += [pscustomobject]@{ Service = $p.Name; EnvName = $var; Domain = $domain }
         }
     }
