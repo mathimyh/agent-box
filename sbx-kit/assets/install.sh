@@ -11,7 +11,7 @@ export DEBIAN_FRONTEND=noninteractive
 # different days get the same versions. Change a pin on purpose. After an
 # opencode change, run `opencode debug config` in a new sandbox and check
 # that the project config is still hidden. See docs/design.md.
-OPENCODE_VERSION=1.19.3
+OPENCODE_VERSION=2.2.7
 NPM_VERSION=11.21.1
 OC_VERSION=4.15.59
 
@@ -45,8 +45,12 @@ fi
 npm install -g "npm@$NPM_VERSION"
 
 # opencode, with the approved permissions as managed config.
-# See opencode-managed.json in the agent-box repo.
-command -v opencode >/dev/null 2>&1 || npm install -g "opencode-ai@$OPENCODE_VERSION"
+# See opencode-managed.json in the agent-box repo. v2 is not on npm as
+# opencode-ai (that package stops at 1.19.x): the v2 installer downloads
+# the cli platform package from npm. It runs as the agent user, so the
+# binary lands in /home/agent/.opencode/bin.
+command -v opencode >/dev/null 2>&1 || su agent -c "curl -fsSL https://opencode.ai/v2/install | bash -s -- --version $OPENCODE_VERSION"
+ln -sf /home/agent/.opencode/bin/opencode /usr/local/bin/opencode
 mkdir -p /etc/opencode
 cp "$ASSETS/opencode-managed.json" /etc/opencode/opencode.json
 # opencode tells the agent it can write to /tmp/opencode. Without this,
