@@ -60,6 +60,16 @@ Config changes (skills, plugins, settings, agent rules) reach a running sandbox 
 
 The copy merges directories: a file removed from the kit stays in the sandbox. Changes to `spec.yaml`, `install.sh` or the network policy still need a full recreate. `sbx kit add` does not accept this kit either. To apply those, remove the sandbox and run step 4 again. Everything in the sandbox is lost, also clones and worktrees.
 
+## Check sandbox health
+
+Run this in PowerShell from the agent-box folder when a sandbox or its workers act up:
+
+```powershell
+.\sbx-kit\healthcheck.ps1 -Name <name>
+```
+
+It checks from the host that the sandbox exists, and that inside it the build tools are on PATH, the git identity is set, a repo is cloned, the nested docker daemon responds and the egress to github.com works through the proxy. It prints one `FAIL` line per problem and exits 1 when there is any. A stopped sandbox is started first.
+
 ## Project kits
 
 A project kit in `kits/<project>/` adds the access that only one project needs, for example read access to its cluster with `oc`, or its MCP servers. Add it with `-Kit`, and `-StaticMcp` for its MCP servers. The command asks for the token the kit declares:
