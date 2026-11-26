@@ -71,6 +71,16 @@ What `build.ps1` stages into `files/home/` (about 15 MB):
 
 The install step installs `libicu`, the .NET SDK 10, `oc` 4.15, npm 11 and `opencode`, writes `/etc/opencode/opencode.json`, and adds the environment to `/etc/sandbox-persistent.sh`. Every shell and SSH session reads that file. Then `agent-config.sh` runs as the agent user and merges the staged config into `~/.claude/settings.json` and `~/.claude.json` with `jq`. The merge keeps the keys that the agent kit and Orca write there (permission mode, hooks, status line).
 
+### .NET SDK drift in running sandboxes
+
+The install step skips when dotnet exists, so a running sandbox never upgrades: it keeps the SDK and the runtimes from its create date. After .NET patch Tuesday, run the in-place upgrade on every sandbox that builds .NET. `dotnet-install.sh` installs side by side, the muxer resolves the newest SDK, and apps roll forward to the newest patch runtime. A process that was already running, for example a dev server behind a published port, keeps the old runtime until it restarts. `sbx exec` runs as a non-root user, so the install needs `sudo` (passwordless inside the sandbox):
+
+```powershell
+sbx exec <name> sh -c 'curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && sudo bash /tmp/dotnet-install.sh --channel 10.0 --install-dir /usr/share/dotnet --no-path && rm -f /tmp/dotnet-install.sh'
+```
+
+Check the version first with `sbx exec <name> dotnet --version`. An unconditional upgrade in the kit is not worth it: it would download about 240 MB on every sync.
+
 Facts learned:
 
 - The sandbox has `remote-settings.json` from the organization. It holds the `Bash(gh auth *)` ask rule, and the kit cannot remove it. The sandbox note tells the agent not to run `gh auth`. `gh` is authenticated through the proxy.
@@ -81,6 +91,8 @@ Facts learned:
 - The Intility ID MCP server is registered with `sbx mcp add intility-id --url ...` and authorized over OAuth on the host. Load it into a sandbox with `sbx mcp load intility-id --sandbox <name>`, or with `--static-mcp` at create.
 - Auto mode refuses `sbx rm`, `sbx create` and `sbx kit add`. The user runs them from the agent-box folder.
 - `sbx cp` does not create parent directories in the sandbox, so it can only replace paths that exist. `sync.ps1` copies only the top-level folders of `files/home/`, which the create step always makes.
+- Interrupting an `sbx exec` can wedge `sandboxd`. The daemon then answers again after a while, but the sandbox can fail to start with `start runtime: ... EOF` (observed 2026-11-26 on the `spike` sandbox, which then had to be removed). `sbx-kit/healthcheck.ps1` reports this as a failed exec.
+- PowerShell 5.1 passes an argument that contains embedded double quotes without wrapping it, so the argument arrives at `sbx` split into several argv elements. An `sh -c '<script>'` call in a kit script must therefore contain no double quotes. pwsh 7 passes the argument correctly. `sbx-kit/healthcheck.ps1` works around it: it writes its shell script without quotes and uses exit codes instead of `[ ... ]` string tests.
 
 ## GitHub token per sandbox
 
